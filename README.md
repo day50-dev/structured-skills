@@ -1,4 +1,7 @@
 # Structured Skills (ss)
+<p align="center">
+<a href=https://pypi.org/project/strusky><img src=https://badge.fury.io/py/strusky.svg/></a>
+</p>
 
 **Structured Skills** is a minimal stack-based virtual machine for orchestrating LLM-powered programs. It gives LLMs the equivalent of structured programming—loops, conditionals, variables, function calls—while keeping the model strictly out of control flow decisions.
 
