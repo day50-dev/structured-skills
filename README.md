@@ -1,5 +1,6 @@
-# Structured Skills (ss)
+
 <p align="center">
+    <img width="400" alt="strusky_400" src="https://github.com/user-attachments/assets/30e50375-4ffd-4b56-b000-fad29d1148d1" /> <br/>
 <a href=https://pypi.org/project/strusky><img src=https://badge.fury.io/py/strusky.svg/></a>
 </p>
 
