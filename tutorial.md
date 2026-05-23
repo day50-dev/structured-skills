@@ -128,7 +128,41 @@ If you are using a local model (like `llama.cpp` or `Ollama`), set the `base_url
 
 ---
 
-## 8. Best Practices
+## 8. MCP Integration
+
+MCP (Model Context Protocol) servers can be imported and called directly using `uvx://` or `npx://` URI schemes, or via a JSON config file:
+
+```ss
+import brave-search from uvx://@anthropic/brave-search-mcp
+$result = %brave-search.search "quantum computing"
+```
+
+The URI scheme tells the VM how to launch the server:
+- `uvx://<package>` → run `uvx <package>` to install and run a Python/PyPI MCP package
+- `npx://<package>` → run `npx <package>` for Node/npm MCP packages
+
+For servers that need arguments (e.g., API keys), use a `mcp_servers.json` file:
+
+```json
+{
+  "brave-search": {
+    "command": "uvx",
+    "args": ["@anthropic/brave-search-mcp"]
+  }
+}
+```
+
+Then import from the file:
+```ss
+import brave-search from mcp_servers.json
+$result = %brave-search.search "quantum computing"
+```
+
+The server is launched as a subprocess and communicated with via stdin/stdout JSON-RPC. It stays alive for the duration of the script and is automatically cleaned up when the script finishes.
+
+---
+
+## 9. Best Practices
 
 1. **Be Explicit with `infer`:** Only use `infer` when you need reasoning. Use `%tools` for everything else.
 2. **Small Skills:** Break complex tasks into small skills. It makes the program easier to audit.

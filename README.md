@@ -194,8 +194,26 @@ Because the decoder uses an LLM for vibe lines, the syntax is flexible — all o
 
 ## MCP Integration
 
-Tools from external MCP servers (declared in `mcp_servers.json`) can be imported and called:
+MCP servers can be imported and called directly using `uvx://` or `npx://` URI schemes, or via a JSON config file:
 
+```ss
+import brave-search from uvx://@anthropic/brave-search-mcp
+$result = %brave-search.search "quantum computing"
+```
+
+The URI scheme tells the VM how to launch the server:
+- `uvx://<package>` → run `uvx <package>` (Python/PyPI packages)
+- `npx://<package>` → run `npx <package>` (Node/npm packages)
+
+For servers that need arguments, use a JSON config file (`mcp_servers.json`):
+
+```json
+{
+  "brave-search": {"command": "uvx", "args": ["@anthropic/brave-search-mcp"]}
+}
+```
+
+Then import from the file:
 ```ss
 import brave-search from mcp_servers.json
 $result = %brave-search.search "quantum computing"

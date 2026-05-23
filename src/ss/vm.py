@@ -53,10 +53,13 @@ class VM:
                     self.jump_targets[i] = start_ip
 
     def run(self):
-        while not self.halted and self.ip < len(self.program):
-            opcode = self.program[self.ip]
-            self.execute(opcode)
-            self.ip += 1
+        try:
+            while not self.halted and self.ip < len(self.program):
+                opcode = self.program[self.ip]
+                self.execute(opcode)
+                self.ip += 1
+        finally:
+            self.mcp.stop_all()
 
     def execute(self, opcode: Opcode):
         if opcode.type == OpcodeType.ASSIGN:
@@ -92,8 +95,7 @@ class VM:
                 if server_name in self.import_registry:
                     mcp_args = {"arg" + str(i): self.evaluate(a) for i, a in enumerate(args)}
                     result = self.mcp.call(server_name, tool_name, mcp_args)
-                # Built-in tools
-                if name == "append":
+                elif name == "append":
                     target_list = self.evaluate(args[0])
                     item = self.evaluate(args[1])
                     if isinstance(target_list, list):
@@ -246,8 +248,11 @@ class VM:
         elif opcode.type == OpcodeType.IMPORT:
             name = opcode.params.get("name")
             source = opcode.params.get("source")
-            self.import_registry[name] = source
-            print(f"DEBUG: Imported {name} from {source}")
+            try:
+                self.mcp.add_server(name, source)
+                self.import_registry[name] = source
+            except Exception as e:
+                print(f"Error: Failed to import MCP server '{name}' from {source}: {e}")
 
         elif opcode.type == OpcodeType.HALT:
             self.halted = True
