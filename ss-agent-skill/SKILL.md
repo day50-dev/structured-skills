@@ -14,7 +14,7 @@ This skill teaches you how to use the **Structured Skills** VM to bootstrap and 
 1. **`agent-create`** — one-shot a prompt into an `.ss` agent script
 2. **`run-agent`** — invoke the agent script with a concrete input prompt
 
-Both are available as CLI commands and can also be run via `ss create` / `ss run`.
+Both are available as CLI commands and can also be run via `strusky create` / `strusky run`.
 
 ## Quick Start
 
@@ -69,7 +69,7 @@ agent-create "make a deep research engine"
 ```
 
 ```ss
-import brave-search from mcp_servers.json
+import brave-search from uvx://@anthropic/brave-search-mcp
 
 def research $topic:
     $queries = infer "Break '$topic' into 4 specific search queries. Return as a JSON list."
@@ -147,7 +147,8 @@ end
 
 ### Imports
 ```ss
-import brave-search from mcp_servers.json
+import brave-search from uvx://@anthropic/brave-search-mcp   # via URI
+import fetch from mcp_servers.json                            # via config file
 ```
 
 After import, tools are callable as `%server-name.tool-name`.

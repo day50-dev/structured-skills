@@ -35,7 +35,7 @@ $fact = infer "Tell me one interesting fact about $topic"
 ```
 Run it:
 ```bash
-python3 -m ss.cli hello.ss
+strusky hello.ss
 ```
 
 ---

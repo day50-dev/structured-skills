@@ -72,7 +72,7 @@ run-agent deep-research.ss "I need to go from NYC to Chicago, Denver, and Miami 
 You can also run `.ss` scripts directly:
 
 ```bash
-$ ss myscript.ss
+strusky myscript.ss
 ```
 ## 🚀 The Core Insight
 
@@ -234,9 +234,9 @@ cp config.toml.example config.toml
 
 ### Commands
 ```bash
-ss <file.ss>                          # Run a script directly
-ss create <prompt>                    # Generate an agent script
-ss run <file.ss> <prompt>             # Run an agent with input
+strusky <file.ss>                     # Run a script directly
+strusky create <prompt>               # Generate an agent script
+strusky run <file.ss> <prompt>        # Run an agent with input
 agent-create <prompt>                 # Generate an agent script
 run-agent <file.ss> <prompt>          # Run an agent with input
 ```
@@ -251,7 +251,7 @@ run-agent <file.ss> <prompt>          # Run an agent with input
 ## Project Structure
 
 ```
-ss                    Root entry point (shell wrapper)
+strusky                CLI entry point (also `./ss` shell wrapper)
 src/ss/
 ├── agent_create.py   LLM-prompted script generator (agent-create)
 ├── agent_runner.py   Prepend $prompt and run via VM (run-agent)

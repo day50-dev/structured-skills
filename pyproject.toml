@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ss = "ss.cli:main"
+strusky = "ss.cli:main"
 agent-create = "ss.agent_create:main"
 run-agent = "ss.agent_runner:main"
 
