@@ -72,8 +72,7 @@ run-agent deep-research.ss "I need to go from NYC to Chicago, Denver, and Miami 
 You can also run `.ss` scripts directly:
 
 ```bash
-python3 -m ss.cli myscript.ss
-./ss myscript.ss
+$ ss myscript.ss
 ```
 ## 🚀 The Core Insight
 
