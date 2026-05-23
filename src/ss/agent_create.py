@@ -84,12 +84,32 @@ def main():
 
     print(f"Generating agent: {prompt}")
 
-    response = client.chat.completions.create(
-        model=config["model"],
-        messages=[
-            {"role": "system", "content": AGENT_CREATE_PROMPT.format(prompt=prompt)}
-        ]
-    )
+    try:
+        response = client.chat.completions.create(
+            model=config["model"],
+            messages=[
+                {"role": "system", "content": AGENT_CREATE_PROMPT.format(prompt=prompt)}
+            ]
+        )
+    except Exception as e:
+        import os
+        config_abspath = os.path.abspath(args.config)
+        error_str = str(e).lower()
+        if "auth" in error_str or "key" in error_str or "401" in error_str or "403" in error_str:
+            print(f"Error: LLM API authentication failed — check the api_key in {config_abspath}")
+        elif "connect" in error_str or "connection" in error_str or "resolve" in error_str:
+            print(f"Error: Could not reach {config['base_url']} — check the base_url in {config_abspath}")
+        else:
+            print(f"Error: LLM API call failed: {e}")
+        print(f"""
+How to fix:
+  Edit {config_abspath} and ensure these are correct:
+    [llm]
+    model = "gpt-4o"
+    base_url = "https://api.openai.com/v1"
+    api_key = "sk-..."   # your real API key
+""")
+        sys.exit(1)
 
     script = response.choices[0].message.content.strip()
     if script.startswith("```"):
