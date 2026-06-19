@@ -1,9 +1,12 @@
 import json
+import subprocess
+import os
 from typing import Dict, Any, List, Optional
 from openai import OpenAI
 from .opcodes import Opcode, OpcodeType
 from .mcp import MCPManager
 from .config import load_config
+from .skill_loader import LoadedSkill
 
 class VM:
     def __init__(self, config_path: str = "config.toml"):
@@ -16,6 +19,7 @@ class VM:
         self.halted = False
         self.import_registry = {}
         self.skills: Dict[str, Dict[str, Any]] = {}
+        self.loaded_skills: Dict[str, LoadedSkill] = {}
         self.jump_targets: Dict[int, int] = {} # ip -> target_ip
         self.mcp = MCPManager()
         self.config = load_config(config_path)["inference"]
@@ -95,6 +99,47 @@ class VM:
                 if server_name in self.import_registry:
                     mcp_args = {"arg" + str(i): self.evaluate(a) for i, a in enumerate(args)}
                     result = self.mcp.call(server_name, tool_name, mcp_args)
+                elif server_name in self.loaded_skills:
+                    ls = self.loaded_skills[server_name]
+                    if tool_name in ls.scripts:
+                        script_path = ls.scripts[tool_name]
+                        try:
+                            eval_args = [str(self.evaluate(a)) for a in args]
+                            ext = os.path.splitext(script_path)[1].lower()
+                            if ext in (".py",):
+                                result = subprocess.run(
+                                    ["python3", script_path] + eval_args,
+                                    capture_output=True, text=True, timeout=30
+                                )
+                                result = result.stdout.strip() or result.stderr.strip()
+                            elif ext in (".sh", ""):
+                                result = subprocess.run(
+                                    ["bash", script_path] + eval_args,
+                                    capture_output=True, text=True, timeout=30
+                                )
+                                result = result.stdout.strip() or result.stderr.strip()
+                            elif ext in (".js",):
+                                result = subprocess.run(
+                                    ["node", script_path] + eval_args,
+                                    capture_output=True, text=True, timeout=30
+                                )
+                                result = result.stdout.strip() or result.stderr.strip()
+                            else:
+                                result = subprocess.run(
+                                    [script_path] + eval_args,
+                                    capture_output=True, text=True, timeout=30
+                                )
+                                result = result.stdout.strip() or result.stderr.strip()
+                        except subprocess.TimeoutExpired:
+                            result = f"Error: Script '{tool_name}' timed out"
+                        except Exception as e:
+                            result = f"Error running script '{tool_name}': {e}"
+                    elif tool_name in ("instructions",):
+                        result = ls.instructions
+                    elif tool_name in ("description",):
+                        result = ls.description
+                    else:
+                        result = f"Error: Tool '{tool_name}' not found in skill '{server_name}'"
                 elif name == "append":
                     target_list = self.evaluate(args[0])
                     item = self.evaluate(args[1])
@@ -253,6 +298,25 @@ class VM:
                 self.import_registry[name] = source
             except Exception as e:
                 print(f"Error: Failed to import MCP server '{name}' from {source}: {e}")
+
+        elif opcode.type == OpcodeType.LOAD_SKILL:
+            skill_path = opcode.params.get("path", "")
+            alias = opcode.params.get("alias", "")
+            try:
+                ls = LoadedSkill(skill_path, alias)
+                ls.load()
+                self.loaded_skills[alias] = ls
+                self.registers[f"${alias}_instructions"] = ls.instructions
+                self.registers[f"${alias}_meta"] = json.dumps({
+                    "name": ls.name,
+                    "description": ls.description,
+                    "alias": ls.alias,
+                    "metadata": ls.metadata,
+                    "scripts": list(ls.scripts.keys()),
+                    "references": list(ls.references.keys()),
+                })
+            except Exception as e:
+                print(f"Error: Failed to load skill '{alias}' from {skill_path}: {e}")
 
         elif opcode.type == OpcodeType.HALT:
             self.halted = True

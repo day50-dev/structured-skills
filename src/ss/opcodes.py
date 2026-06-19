@@ -15,6 +15,7 @@ class OpcodeType(str, Enum):
     DEF = "DEF"
     RETURN = "RETURN"
     IMPORT = "IMPORT"
+    LOAD_SKILL = "LOAD_SKILL"
     HALT = "HALT"
 
 class Opcode(BaseModel):

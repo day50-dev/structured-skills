@@ -20,7 +20,7 @@ class Decoder:
             return []
 
         # Structural blocks are better handled by regex for reliability
-        if any(line.startswith(x) for x in ["def ", "if ", "for ", "return ", "import "]) or line in ["end", "else:"]:
+        if any(line.startswith(x) for x in ["def ", "if ", "for ", "return ", "import ", "load "]) or line in ["end", "else:"]:
              return self._decode_regex(line)
 
         # For "vibe" lines, try the LLM
@@ -121,6 +121,14 @@ class Decoder:
                 name = import_match.group(1)
                 source = import_match.group(2)
                 return [Opcode(type=OpcodeType.IMPORT, params={"name": name, "source": source})]
+
+        # LOAD SKILL
+        if line.startswith("load "):
+            load_match = re.match(r"load\s+skill\s+(.+?)\s+as\s+(\w+)", line)
+            if load_match:
+                skill_path = load_match.group(1).strip()
+                alias = load_match.group(2)
+                return [Opcode(type=OpcodeType.LOAD_SKILL, params={"path": skill_path, "alias": alias})]
 
         # IF / ELSE / END
         if line == "else:": return [Opcode(type=OpcodeType.ELSE)]

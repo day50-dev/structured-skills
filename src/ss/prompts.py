@@ -12,6 +12,7 @@ OPCODE SCHEMA:
 - DEF: {"type": "DEF", "params": {"name": "skill_name", "params": ["$arg1", "$arg2"]}}
 - RETURN: {"type": "RETURN", "params": {"value": "$var_or_literal"}}
 - IMPORT: {"type": "IMPORT", "params": {"name": "name", "source": "source"}}
+- LOAD_SKILL: {"type": "LOAD_SKILL", "params": {"path": "path/to/skill", "alias": "name"}}
 - HALT: {"type": "HALT", "params": {}}
 
 VIBE PRINCIPLES:

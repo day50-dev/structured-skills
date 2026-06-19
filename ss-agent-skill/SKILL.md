@@ -153,6 +153,28 @@ import fetch from mcp_servers.json                            # via config file
 
 After import, tools are callable as `%server-name.tool-name`.
 
+### Loading Agent Skills (SKILL.md directories)
+```ss
+load skill ./skills/my-skill as my
+```
+
+This loads a standard Agent Skills directory containing `SKILL.md`, and makes available:
+
+- **`$my_instructions`** — register containing the SKILL.md body (instructions)
+- **`$my_meta`** — register with JSON metadata (name, description, available scripts)
+- **`%my.<script>`** — call scripts from the skill's `scripts/` directory
+- **`%my.instructions`** — retrieve the instructions inline
+- **`%my.description`** — retrieve the description inline
+
+Example:
+```ss
+load skill ./skills/pdf-processing as pdf
+$task = "Extract tables from invoice.pdf following these rules: $pdf_instructions"
+$result = infer $task
+# Or run a bundled script:
+%pdf.extract invoice.pdf
+```
+
 ### Built-in Tools (no import)
 
 | Invocation | Behavior |
