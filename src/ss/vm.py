@@ -184,7 +184,6 @@ class VM:
                         result = 0
                 elif name == "list_files":
                     path = self.evaluate(args[0])
-                    import os
                     try:
                         result = [os.path.join(path, f) for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
                     except Exception as e:

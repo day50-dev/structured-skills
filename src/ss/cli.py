@@ -11,16 +11,25 @@ def run_script(file_path: str, config_path: str = "config.toml"):
 
     program = []
     imports = []
+    load_skills = []
     for line in lines:
-        if line.strip().startswith("import "):
-            imports.append(line.strip())
+        stripped = line.strip()
+        if stripped.startswith("import "):
+            imports.append(stripped)
+        elif stripped.startswith("load skill "):
+            load_skills.append(stripped)
 
     imports_context = "\n".join(imports)
+    skills_context = "\n".join(load_skills)
+
+    full_context = imports_context
+    if skills_context:
+        full_context += "\n" + skills_context
 
     for line in lines:
         if not line.strip() or line.strip().startswith("#"):
             continue
-        opcodes = decoder.decode_line(line, imports_context=imports_context)
+        opcodes = decoder.decode_line(line, imports_context=full_context)
         program.extend(opcodes)
 
     vm = VM(config_path=config_path)
