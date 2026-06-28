@@ -1,4 +1,5 @@
 import sys
+import re
 import json
 import argparse
 import logging
@@ -7,70 +8,87 @@ from .config import load_config
 
 logger = logging.getLogger(__name__)
 
-AGENT_CREATE_PROMPT = """
-You are a code generator for the `.ss` scripting language. Generate ONLY the script code (no markdown, no explanation).
-
-LANGUAGE RULES:
-- `$var = "value"` — string assignment
-- `$var = $other` — copy a register
-- `$var = ["a", "b"]` — JSON list literal
-- `$var = infer "prompt with $vars"` — calls an LLM, result stored in $var
-- `$var = %tool arg1 arg2` — calls a tool, result stored in $var
-- `%tool arg1 arg2` — calls a tool (discard result)
-- `def name $param1, $param2:` ... `end` — skill definition
-- `return $value` — return from skill
-- `for each $item in $list:` ... `end` — iterate
-- `if $cond:` ... `else:` ... `end` — conditional
-- Comments start with `#`
-
-BUILT-IN TOOLS (no import needed):
-- %read path            # Read file → string
-- %write path data      # Write file
-- %append list item     # Append to list (mutates in place)
-- %join list separator  # Join list items into a string
-- %list_files dir       # List files → JSON list
-- %add a b              # Add numbers
-- %sum list             # Sum a list of numbers
-
-CRITICAL RULES FOR CORRECT SCRIPTS:
-1. NEVER hardcode placeholder data. ALL content must come from `infer` calls at runtime.
-2. To build a list from infer results: start with `$list = []`, then `%append $list $item`.
-3. To join a list into a string for further infer calls, use `%join`.
-4. `infer` accepts a prompt string. Reference registers inside it like `"analyze $query"`.
-5. The script receives user input in `$prompt`. It MUST write final output back to `$prompt`.
-6. Script structure: def skills first, then a main section that calls them.
-
-CRITICAL: `infer` calls an LLM that has NO internet access and NO browsing ability.
-Infer prompts MUST:
-- Ask the LLM to use its own training knowledge (e.g. "Based on your knowledge, explain...")
-- NEVER say "search", "fetch", "browse", "look up", "access", "scrape", "crawl", "retrieve"
-- NEVER ask for real-time data or live information
-- Instead use: "From your knowledge, describe...", "Analyze...", "List...", "Explain..."
-
-CRITICAL: To call a skill you defined with `def`, use `%` prefix. Always write `$var = %skill_name $args`.
-WRONG: `$result = my_skill $input`
-RIGHT: `$result = %my_skill $input`
-
-CORRECT EXAMPLE (research agent):
-```
-def research $topic:
-    $info = infer "Based on your knowledge, analyze $topic. Provide key facts and detailed information."
-    return $info
+TEMPLATE = """def answer $query:
+    $result = infer "INSTRUCTION_1"
+    return $result
 end
 
-def write_report $content:
-    $report = infer "Write a comprehensive report based on this: $content"
-    return $report
-end
+$prompt = %answer $prompt"""
 
-$findings = %research $prompt
-$prompt = %write_report $findings
-```
+AGENT_CREATE_PROMPT = """You are filling in a .ss script template. Replace INSTRUCTION_1 with a short, direct instruction for an LLM.
 
 USER REQUEST: {prompt}
 
-OUTPUT:
-Return ONLY the `.ss` script content. No explanations, no markdown formatting."""
+TEMPLATE:
+{TEMPLATE}
+
+CRITICAL: INSTRUCTION_1 will be sent to an LLM. It must be:
+- A direct question or instruction (1-2 sentences max)
+- Asking the LLM to use its own knowledge
+- NO meta-commentary, no roleplay instructions, no "act as"
+- NEVER use: search, fetch, browse, look up, access, retrieve, scrape, crawl
+- Reference $query to include the user's original question
+
+Good examples:
+  "Answer this question in detail: $query"
+  "Explain the following topic thoroughly: $query"
+  "List and describe the key aspects of: $query"
+
+Bad examples:
+  "Based on your knowledge, act as a researcher..."  (roleplay/meta)
+  "From your knowledge, please provide..."  (wordy)
+  "You will receive raw research data..."  (assumes context it doesn't have)
+
+OUTPUT: the filled template. No explanations, no markdown."""
+
+BUILTIN_TOOLS = {"infer", "read", "write", "append", "join", "list_files", "add", "sum",
+                 "True", "False", "None"}
+
+def _fix_script(script: str) -> str:
+    """Post-process generated script: fix missing % on skill calls."""
+    lines = script.split("\n")
+    fixed = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            fixed.append(line)
+            continue
+        m = re.match(r"^(\s*\$\w+\s*=\s*)([\w][\w.-]*)(\s+\$.*)", stripped)
+        if m:
+            name = m.group(2)
+            if name not in BUILTIN_TOOLS and not name.startswith("%"):
+                indent = line[:len(line) - len(line.lstrip())]
+                fixed.append(indent + m.group(1).strip() + " %" + name + m.group(3))
+                continue
+        fixed.append(line)
+    return "\n".join(fixed)
+
+
+def _generate_script(prompt: str, config: dict) -> tuple[str, dict | None]:
+    client = OpenAI(base_url=config["base_url"], api_key=config["api_key"] or "none")
+    system_msg = AGENT_CREATE_PROMPT.format(
+        prompt=prompt,
+        TEMPLATE=TEMPLATE,
+    )
+    response = client.chat.completions.create(
+        model=config["model"],
+        messages=[{"role": "system", "content": system_msg}],
+    )
+    usage = getattr(response, "usage", None)
+    tokens = {"prompt": usage.prompt_tokens, "completion": usage.completion_tokens, "total": usage.total_tokens} if usage else None
+    raw = response.choices[0].message.content.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+    if raw.endswith("```"):
+        raw = raw.rsplit("```", 1)[0]
+    raw = raw.strip()
+    lines = raw.split("\n")
+    if lines and lines[0].lower().startswith("template"):
+        lines = lines[1:]
+    script = "\n".join(lines).strip()
+    script = _fix_script(script)
+    return script, tokens
+
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -89,23 +107,13 @@ def main():
         output_path = f"{name}.ss"
 
     config = load_config(args.config)["decoder"]
-    client = OpenAI(
-        base_url=config["base_url"],
-        api_key=config["api_key"] or "none"
-    )
 
     print(f"Generating agent: {prompt}")
 
     try:
-        response = client.chat.completions.create(
-            model=config["model"],
-            messages=[
-                {"role": "system", "content": AGENT_CREATE_PROMPT.format(prompt=prompt)}
-            ]
-        )
-        usage = getattr(response, "usage", None)
-        if usage:
-            logger.info("Tokens: %s prompt → %s generated → %s total", usage.prompt_tokens, usage.completion_tokens, usage.total_tokens)
+        script, tokens = _generate_script(prompt, config)
+        if tokens:
+            logger.info("Tokens: %s prompt → %s generated → %s total", tokens["prompt"], tokens["completion"], tokens["total"])
         else:
             logger.info("Tokens: (not reported by API)")
     except Exception as e:
@@ -127,13 +135,6 @@ How to fix:
     api_key = "sk-..."   # your real API key
 """)
         sys.exit(1)
-
-    script = response.choices[0].message.content.strip()
-    if script.startswith("```"):
-        script = script.split("\n", 1)[1]
-    if script.endswith("```"):
-        script = script.rsplit("```", 1)[0]
-    script = script.strip()
 
     with open(output_path, "w") as f:
         f.write(script + "\n")
