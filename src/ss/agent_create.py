@@ -40,10 +40,21 @@ CRITICAL RULES FOR CORRECT SCRIPTS:
 5. The script receives user input in `$prompt`. It MUST write final output back to `$prompt`.
 6. Script structure: def skills first, then a main section that calls them.
 
+CRITICAL: `infer` calls an LLM that has NO internet access and NO browsing ability.
+Infer prompts MUST:
+- Ask the LLM to use its own training knowledge (e.g. "Based on your knowledge, explain...")
+- NEVER say "search", "fetch", "browse", "look up", "access", "scrape", "crawl", "retrieve"
+- NEVER ask for real-time data or live information
+- Instead use: "From your knowledge, describe...", "Analyze...", "List...", "Explain..."
+
+CRITICAL: To call a skill you defined with `def`, use `%` prefix. Always write `$var = %skill_name $args`.
+WRONG: `$result = my_skill $input`
+RIGHT: `$result = %my_skill $input`
+
 CORRECT EXAMPLE (research agent):
 ```
 def research $topic:
-    $info = infer "Research the topic: $topic. Provide a detailed analysis with facts."
+    $info = infer "Based on your knowledge, analyze $topic. Provide key facts and detailed information."
     return $info
 end
 

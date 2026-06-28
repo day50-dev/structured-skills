@@ -24,6 +24,7 @@ class VM:
         self.skills: Dict[str, Dict[str, Any]] = {}
         self.loaded_skills: Dict[str, LoadedSkill] = {}
         self.jump_targets: Dict[int, int] = {} # ip -> target_ip
+        self.token_usage: List[Dict[str, int]] = []
         self.mcp = MCPManager()
         self.config = load_config(config_path)["inference"]
         self.client = OpenAI(
@@ -225,7 +226,6 @@ class VM:
         elif opcode.type == OpcodeType.INFER:
             prompt = opcode.params.get("prompt")
             target = opcode.params.get("register")
-            print(f"DEBUG: Inferring with prompt: {prompt}")
             evaluated_prompt = prompt
             for reg, val in list(self.registers.items()):
                 if isinstance(reg, str) and reg.startswith("$"):
@@ -249,7 +249,7 @@ class VM:
                     )
                     usage = getattr(response, "usage", None)
                     if usage:
-                        logger.info("Tokens: %s prompt → %s generated → %s total", usage.prompt_tokens, usage.completion_tokens, usage.total_tokens)
+                        self.token_usage.append({"prompt": usage.prompt_tokens, "completion": usage.completion_tokens, "total": usage.total_tokens})
                     result = response.choices[0].message.content.strip()
                 except Exception as e:
                     print(f"DEBUG: LLM Inference failed: {e}. Using mock fallback.")
