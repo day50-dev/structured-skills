@@ -66,6 +66,36 @@ else:
     AGENTS_DIR = HERE / "agents"
 AGENTS_DIR.mkdir(exist_ok=True)
 
+_GUIDE_CACHE = None
+
+def _load_guide() -> str:
+    global _GUIDE_CACHE
+    if _GUIDE_CACHE is None:
+        p = PROJECT / "guide.md"
+        if p.exists():
+            _GUIDE_CACHE = p.read_text()
+        else:
+            _GUIDE_CACHE = ""
+    return _GUIDE_CACHE
+
+_MODIFY_SYSTEM = """You are modifying an ss (Structured Skills) script.
+
+LANGUAGE REFERENCE:
+{guide}
+
+SCRIPT:
+{script}
+
+USER INSTRUCTION: {instruction}
+
+Rules:
+- Use $prompt for input and write the final answer back to $prompt
+- infer prompts must be imperative, direct, 1-3 sentences
+- Use %name.verb key=value syntax for MCP tool calls
+- Every def must have a matching end
+- Every if/for must have a matching end
+- Output ONLY the complete modified .ss script, no explanations, no markdown formatting"""
+
 
 def discover_agents():
     agents = {}
@@ -368,7 +398,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             try:
                 client = OpenAI(base_url=config["base_url"], api_key=config["api_key"] or "none")
-                system_msg = MODIFY_PROMPT.format(script=current_script, instruction=instruction)
+                guide = _load_guide()
+                system_msg = _MODIFY_SYSTEM.format(guide=guide, script=current_script, instruction=instruction)
                 response = client.chat.completions.create(
                     model=config["model"],
                     messages=[{"role": "system", "content": system_msg}],
@@ -430,7 +461,19 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             current_script = script_path.read_text()
             config = load_config(str(PROJECT / "config.toml"))["decoder"]
             try:
-                new_script, tokens = _modify_script(current_script, instruction, config)
+                guide = _load_guide()
+                system_msg = _MODIFY_SYSTEM.format(guide=guide, script=current_script, instruction=instruction)
+                client = OpenAI(base_url=config["base_url"], api_key=config["api_key"] or "none")
+                response = client.chat.completions.create(
+                    model=config["model"],
+                    messages=[{"role": "system", "content": system_msg}],
+                )
+                raw = response.choices[0].message.content.strip()
+                if raw.startswith("```"): raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
+                if raw.endswith("```"): raw = raw.rsplit("```", 1)[0]
+                new_script = _fix_script(raw.strip())
+                usage = getattr(response, "usage", None)
+                tokens = {"prompt": usage.prompt_tokens, "completion": usage.completion_tokens, "total": usage.total_tokens} if usage else None
                 self._json(200, {"content": new_script, "tokens": tokens})
             except Exception as e:
                 logger.error("Modify failed: %s", e)

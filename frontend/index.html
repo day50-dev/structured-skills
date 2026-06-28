@@ -793,14 +793,8 @@ async function selectAgent(name) {
   document.getElementById('viewName').textContent = data.name;
   document.getElementById('viewPath').textContent = data.path + (data.editable ? '' : ' (read-only)');
 
-  // Code view with syntax highlighting
-  const codeEl = document.getElementById('codeView');
-  codeEl.textContent = data.content;
-  try { hljs.highlightElement(codeEl); } catch (e) { console.warn('highlight:', e); }
-
   // Edit area
   document.getElementById('editArea').value = data.content;
-  document.getElementById('saveBtn').disabled = !data.editable;
 
   // Render input spec fields
   renderInputSpecs();
@@ -811,6 +805,12 @@ async function selectAgent(name) {
 
   renderList();
   switchTab(currentTab);
+  // Highlight code view (after tab switch so element is visible)
+  const codeEl = document.getElementById('codeView');
+  codeEl.textContent = data.content;
+  requestAnimationFrame(() => {
+    try { hljs.highlightElement(codeEl); } catch (e) { console.warn('highlight:', e); }
+  });
   _selecting = false;
 }
 
@@ -1066,15 +1066,16 @@ async function modifyAgent() {
     if (fullScript) {
       document.getElementById('editArea').value = fullScript;
       currentAgent.content = fullScript;
+      // Update code view
+      const codeEl = document.getElementById('codeView');
+      codeEl.textContent = fullScript;
+      requestAnimationFrame(() => {
+        try { hljs.highlightElement(codeEl); } catch (e) { console.warn('highlight:', e); }
+      });
       // auto-save
       if (currentAgent.editable) {
         await api('PUT', `/api/agents/${encodeURIComponent(currentAgent.name)}`, { content: fullScript, message: instruction });
       }
-      // Update code view and show it
-      switchTab('view');
-      const codeEl = document.getElementById('codeView');
-      codeEl.textContent = fullScript;
-      try { hljs.highlightElement(codeEl); } catch (e) { console.warn('highlight:', e); }
     }
   } catch (e) {
     showToast('Failed to modify agent', 'error');
@@ -1155,11 +1156,13 @@ async function saveAgent() {
     if (data.error) { showToast(data.error, 'error'); return; }
     _pushEditHistory(currentAgent.name, content);
     currentAgent.content = content;
-    const ce = document.getElementById('codeView');
-    ce.textContent = content;
-    try { hljs.highlightElement(ce); } catch (e) { console.warn('highlight:', e); }
     showToast('Saved', 'success');
     switchTab('view');
+    const ce = document.getElementById('codeView');
+    ce.textContent = content;
+    requestAnimationFrame(() => {
+      try { hljs.highlightElement(ce); } catch (e) { console.warn('highlight:', e); }
+    });
   } catch (e) {
     showToast('Failed to save', 'error');
   } finally {
