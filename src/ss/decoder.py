@@ -2,7 +2,7 @@ import re
 import json
 from typing import List
 from openai import OpenAI
-from .opcodes import Opcode, OpcodeType, InputSpec
+from .opcodes import Opcode, OpcodeType, InputSpec, OutputSpec
 from .config import load_config
 from .prompts import DECODER_PROMPT
 
@@ -22,6 +22,7 @@ def _parse_call_args(raw_args: List[str]) -> dict:
 
 
 INPUT_RE = re.compile(r"input\s+\$(\w+)\s+as\s+(\w+)")
+OUTPUT_RE = re.compile(r"output\s+\$(\w+)\s+as\s+(\w+):?\s*(.*)")
 
 def parse_input_specs(lines: List[str]) -> List[InputSpec]:
     specs = []
@@ -29,6 +30,14 @@ def parse_input_specs(lines: List[str]) -> List[InputSpec]:
         m = INPUT_RE.match(line.strip())
         if m:
             specs.append(InputSpec(name=m.group(1), type=m.group(2)))
+    return specs
+
+def parse_output_specs(lines: List[str]) -> List[OutputSpec]:
+    specs = []
+    for line in lines:
+        m = OUTPUT_RE.match(line.strip())
+        if m:
+            specs.append(OutputSpec(name=m.group(1), type=m.group(2), register=m.group(3).strip()))
     return specs
 
 

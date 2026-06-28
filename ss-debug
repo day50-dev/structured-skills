@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+import sys
+import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+from ss.dap_server import DAPServer
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="SS Debug Adapter Protocol server")
+    parser.add_argument("--port", type=int, default=4711, help="TCP port for DAP (default: 4711)")
+    parser.add_argument("--host", default="127.0.0.1", help="Host to bind (default: 127.0.0.1)")
+    args = parser.parse_args()
+    server = DAPServer(host=args.host, port=args.port)
+    server.serve()
+
+if __name__ == "__main__":
+    main()

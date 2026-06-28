@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>strusky</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
 <style>
 :root {
   --bg: #0f0f1a;
@@ -117,7 +118,7 @@ header .actions { display: flex; gap: 8px; }
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
   background: var(--bg);
 }
 .main-placeholder {
@@ -156,7 +157,7 @@ header .actions { display: flex; gap: 8px; }
   border-bottom-color: var(--accent);
 }
 .tab-content { flex: 1; overflow: auto; display: none; padding: 20px; }
-.tab-content.active { display: block; }
+.tab-content.active { display: block; height: 100%; }
 
 /* View Tab */
 .code-view {
@@ -166,10 +167,18 @@ header .actions { display: flex; gap: 8px; }
   font-family: var(--font);
   font-size: 13px;
   line-height: 1.6;
-  white-space: pre-wrap;
   overflow: auto;
-  max-height: calc(100vh - 200px);
-  color: var(--text);
+  margin: 0;
+  border: none;
+}
+.code-view code {
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: none;
+  padding: 0;
 }
 .code-view .line-number {
   display: inline-block;
@@ -195,6 +204,52 @@ header .actions { display: flex; gap: 8px; }
   outline: none;
 }
 .edit-area:focus { border-color: var(--accent); }
+
+/* Input specs */
+.input-specs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.input-specs .spec-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.input-specs .spec-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent2);
+  min-width: 100px;
+  white-space: nowrap;
+}
+.input-specs .spec-type {
+  font-size: 10px;
+  color: var(--text2);
+  background: var(--surface2);
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.input-specs input, .input-specs textarea {
+  flex: 1;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--ui-font);
+  outline: none;
+}
+.input-specs textarea { min-height: 60px; resize: vertical; font-family: var(--font); font-size: 12px; }
+.input-specs input:focus, .input-specs textarea:focus { border-color: var(--accent); }
 
 /* Run Tab */
 .run-prompt-area {
@@ -223,7 +278,6 @@ header .actions { display: flex; gap: 8px; }
   line-height: 1.6;
   white-space: pre-wrap;
   overflow: auto;
-  max-height: calc(100vh - 280px);
 }
 .run-output .reg-table {
   width: 100%;
@@ -260,6 +314,7 @@ header .actions { display: flex; gap: 8px; }
   cursor: pointer;
   transition: all 0.15s;
   font-family: var(--ui-font);
+  text-decoration: none;
 }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-primary:hover { background: var(--accent2); }
@@ -269,6 +324,79 @@ header .actions { display: flex; gap: 8px; }
 .btn-danger:hover { opacity: 0.85; }
 .btn-sm { padding: 5px 10px; font-size: 12px; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Guide View */
+.guide-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.guide-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.guide-view-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+}
+.guide-view-body h1, .guide-view-body h2, .guide-view-body h3 { color: var(--accent2); margin: 1.4em 0 0.6em; }
+.guide-view-body h2 { border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.guide-view-body h1 { font-size: 22px; }
+.guide-view-body h2 { font-size: 18px; }
+.guide-view-body h3 { font-size: 15px; }
+.guide-view-body p { margin: 0.7em 0; }
+.guide-view-body code {
+  background: var(--surface2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--orange);
+}
+.guide-view-body pre {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.guide-view-body pre code { background: none; padding: 0; color: var(--text); }
+.guide-view-body table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+.guide-view-body th, .guide-view-body td {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  text-align: left;
+  font-size: 13px;
+}
+.guide-view-body th { background: var(--surface2); color: var(--text2); font-weight: 600; }
+.guide-view-body ul, .guide-view-body ol { padding-left: 24px; margin: 0.6em 0; }
+.guide-view-body li { margin: 0.3em 0; }
+.guide-view-body a { color: var(--accent2); }
+.guide-view-body a:hover { color: var(--accent); }
+.guide-view-body hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
+.guide-view-body blockquote {
+  border-left: 3px solid var(--accent);
+  padding: 8px 16px;
+  margin: 1em 0;
+  background: var(--surface2);
+  border-radius: 0 6px 6px 0;
+  color: var(--text2);
+}
+.guide-spinner { text-align: center; padding: 40px; color: var(--text2); }
 
 /* Chat Panel */
 .chat-panel {
@@ -451,8 +579,9 @@ header .actions { display: flex; gap: 8px; }
 <body>
 
 <header>
-  <h1><span>◈</span> strusky</h1>
+  <h1><a href="https://github.com/day50-dev/structured-skills" target="_blank" style="color:inherit;text-decoration:none"><span>◈</span> strusky</a></h1>
   <div class="actions">
+    <a class="btn btn-secondary" href="#guide">Guide</a>
     <button class="btn btn-primary" onclick="showCreatePanel()">+ New Agent</button>
     <button class="btn btn-secondary" onclick="refreshList()">⟳</button>
   </div>
@@ -480,6 +609,14 @@ header .actions { display: flex; gap: 8px; }
         <button class="btn btn-primary" onclick="sendChatMessage()" id="chatSendBtn">Send</button>
       </div>
     </div>
+    <div class="guide-view" id="guideView" style="display:none">
+      <div class="guide-view-header">
+        <span>Guide</span>
+      </div>
+      <div class="guide-view-body" id="guideBody">
+        <div class="guide-spinner"><span class="spinner"></span> Loading...</div>
+      </div>
+    </div>
     <div class="main-placeholder" id="placeholder">
       <div class="inner">
         <div class="big-icon">◈</div>
@@ -500,13 +637,15 @@ header .actions { display: flex; gap: 8px; }
           <span id="viewName" style="font-size:15px;font-weight:600"></span>
           <span id="viewPath" style="font-size:11px;color:var(--text2)"></span>
         </div>
-        <div class="code-view" id="codeView"></div>
+        <pre class="code-view"><code class="language-python" id="codeView"></code></pre>
         <div style="margin-top:16px">
+          <div id="inputSpecs" class="input-specs" style="display:none"></div>
           <div class="run-prompt-area">
             <input type="text" id="runPrompt" placeholder="Enter prompt for the agent..." onkeydown="if(event.key==='Enter') runAgent()">
             <button class="btn btn-primary" onclick="runAgent()" id="runBtn">Run</button>
           </div>
           <div id="runOutputArea" style="display:none">
+            <div id="runProgress" style="display:none;margin-bottom:8px;padding:8px 12px;background:var(--surface2);border-radius:var(--radius);font-family:var(--font);font-size:12px;line-height:1.5;white-space:pre-wrap;color:var(--text2)"></div>
             <div id="runTokens" class="token-info"></div>
             <div class="run-output" id="runOutput"></div>
           </div>
@@ -522,6 +661,11 @@ header .actions { display: flex; gap: 8px; }
             <button class="btn btn-secondary btn-sm" onclick="switchTab('view')">Cancel</button>
           </div>
         </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <input type="text" id="modifyPrompt" placeholder="Tell the AI how to modify this agent..." style="flex:1;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:var(--ui-font);outline:none" onkeydown="if(event.key==='Enter') modifyAgent()">
+          <button class="btn btn-secondary btn-sm" onclick="modifyAgent()" id="modifyBtn">Modify</button>
+        </div>
+        <div id="modifySpinner" style="display:none;padding:8px 12px;margin-bottom:8px;background:var(--surface2);border-radius:var(--radius);font-size:12px;color:var(--text2)"><span class="spinner"></span> Modifying...</div>
         <textarea class="edit-area" id="editArea" spellcheck="false"></textarea>
       </div>
 
@@ -532,15 +676,22 @@ header .actions { display: flex; gap: 8px; }
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
-<script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.4/marked.min.js"></script>
+<script>hljs.highlightAll();
+
 // State
 let agents = [];
 let currentAgent = null;
 let currentTab = 'view';
+let currentInputSpecs = [];
 
 // Init
 document.addEventListener('DOMContentLoaded', () => {
   refreshList();
+  window.addEventListener('hashchange', handleHash);
+  handleHash();
 });
 
 // API helpers
@@ -589,22 +740,34 @@ function renderList() {
 }
 
 // Agent selection
+let _selecting = false;
 async function selectAgent(name) {
+  hideCreatePanel();
+  hideGuide();
   const data = await api('GET', `/api/agents/${encodeURIComponent(name)}`);
   if (data.error) { showToast(data.error, 'error'); return; }
+  _selecting = true;
+  location.hash = '#agent/' + encodeURIComponent(name);
+  _selecting = false;
   currentAgent = data;
+  currentInputSpecs = data.input_specs || [];
   document.getElementById('placeholder').style.display = 'none';
   const mc = document.getElementById('mainContent');
   mc.style.display = 'flex';
   document.getElementById('viewName').textContent = data.name;
   document.getElementById('viewPath').textContent = data.path + (data.editable ? '' : ' (read-only)');
 
-  // Code view
-  document.getElementById('codeView').textContent = data.content;
+  // Code view with syntax highlighting
+  const codeEl = document.getElementById('codeView');
+  codeEl.textContent = data.content;
+  hljs.highlightElement(codeEl);
 
   // Edit area
   document.getElementById('editArea').value = data.content;
   document.getElementById('saveBtn').disabled = !data.editable;
+
+  // Render input spec fields
+  renderInputSpecs();
 
   // Clear run output
   document.getElementById('runOutputArea').style.display = 'none';
@@ -614,10 +777,39 @@ async function selectAgent(name) {
   switchTab(currentTab);
 }
 
+function renderInputSpecs() {
+  const container = document.getElementById('inputSpecs');
+  if (!currentInputSpecs || currentInputSpecs.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  let html = '';
+  for (const spec of currentInputSpecs) {
+    const id = 'input_' + escHtml(spec.name);
+    if (spec.type === 'file') {
+      html += `<div class="spec-row">
+        <span class="spec-label">${escHtml(spec.name)}</span>
+        <span class="spec-type">file</span>
+        <textarea id="${id}" placeholder="Paste file content or enter path..." rows="2"></textarea>
+      </div>`;
+    } else {
+      html += `<div class="spec-row">
+        <span class="spec-label">${escHtml(spec.name)}</span>
+        <span class="spec-type">${escHtml(spec.type)}</span>
+        <input id="${id}" type="${spec.type === 'number' ? 'number' : 'text'}" placeholder="Enter ${spec.type} value...">
+      </div>`;
+    }
+  }
+  container.innerHTML = html;
+  container.style.display = '';
+}
+
 function clearMain() {
   currentAgent = null;
+  hideGuide();
   document.getElementById('placeholder').style.display = 'flex';
   document.getElementById('mainContent').style.display = 'none';
+  if (location.hash) location.hash = '';
   renderList();
 }
 
@@ -628,6 +820,48 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
   document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.add('active');
   document.getElementById(`panel${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.add('active');
+}
+
+// Guide
+let guideLoaded = false;
+async function showGuide() {
+  const h = document.getElementById('guideView');
+  h.style.display = 'flex';
+  document.getElementById('placeholder').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'none';
+  if (!guideLoaded) {
+    guideLoaded = true;
+    try {
+      const data = await api('GET', '/api/guide');
+      if (data.error) { document.getElementById('guideBody').innerHTML = '<p>Guide not available.</p>'; return; }
+      document.getElementById('guideBody').innerHTML = marked.parse(data.content);
+    } catch (e) {
+      document.getElementById('guideBody').innerHTML = '<p>Failed to load guide.</p>';
+    }
+  }
+}
+
+function hideGuide() {
+  document.getElementById('guideView').style.display = 'none';
+}
+
+function handleHash() {
+  if (_selecting) return;
+  const hash = location.hash.slice(1);
+  if (hash === 'guide') {
+    showGuide();
+  } else if (hash.startsWith('agent/')) {
+    const name = decodeURIComponent(hash.slice(6));
+    selectAgent(name);
+  } else {
+    hideGuide();
+    if (!currentAgent) {
+      document.getElementById('placeholder').style.display = 'flex';
+      document.getElementById('mainContent').style.display = 'none';
+    } else {
+      document.getElementById('mainContent').style.display = 'flex';
+    }
+  }
 }
 
 // Chat create agent
@@ -654,7 +888,7 @@ function addChatMessage(role, text, agent) {
     nameDiv.textContent = '⚡ ' + agent.name + '.ss';
     const pre = document.createElement('pre');
     pre.className = 'agent-result';
-    pre.textContent = agent.content.slice(0, 500) + (agent.content.length > 500 ? '...' : '');
+    pre.textContent = agent.content;
     const actions = document.createElement('div');
     actions.className = 'agent-actions';
     const btn = document.createElement('button');
@@ -721,6 +955,36 @@ async function acceptChatAgent(name) {
   selectAgent(name);
 }
 
+// Modify with AI
+async function modifyAgent() {
+  if (!currentAgent) return;
+  const instruction = document.getElementById('modifyPrompt').value.trim();
+  if (!instruction) { showToast('Enter a modification instruction', 'error'); return; }
+  const spinner = document.getElementById('modifySpinner');
+  const btn = document.getElementById('modifyBtn');
+  spinner.style.display = '';
+  btn.disabled = true;
+  try {
+    const data = await api('POST', `/api/agents/${encodeURIComponent(currentAgent.name)}/modify`, { instruction });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    document.getElementById('editArea').value = data.content;
+    const codeEl = document.getElementById('codeView');
+    codeEl.textContent = data.content;
+    hljs.highlightElement(codeEl);
+    currentAgent.content = data.content;
+    if (data.tokens) {
+      showToast(`Modified — ${data.tokens.prompt} in → ${data.tokens.completion} out`, 'success');
+    } else {
+      showToast('Modified', 'success');
+    }
+  } catch (e) {
+    showToast('Failed to modify agent', 'error');
+  } finally {
+    spinner.style.display = 'none';
+    btn.disabled = false;
+  }
+}
+
 // Edit / Save
 async function saveAgent() {
   if (!currentAgent || !currentAgent.editable) return;
@@ -732,7 +996,9 @@ async function saveAgent() {
     const data = await api('PUT', `/api/agents/${encodeURIComponent(currentAgent.name)}`, { content });
     if (data.error) { showToast(data.error, 'error'); return; }
     currentAgent.content = content;
-    document.getElementById('codeView').textContent = content;
+    const ce = document.getElementById('codeView');
+    ce.textContent = content;
+    hljs.highlightElement(ce);
     showToast('Saved', 'success');
     switchTab('view');
   } catch (e) {
@@ -747,15 +1013,26 @@ async function saveAgent() {
 async function runAgent() {
   if (!currentAgent) return;
   const prompt = document.getElementById('runPrompt').value.trim();
-  if (!prompt) { showToast('Enter a prompt', 'error'); return; }
   const btn = document.getElementById('runBtn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Running...';
   document.getElementById('runOutputArea').style.display = 'none';
+
+  // Collect input spec values
+  const inputs = {};
+  if (currentInputSpecs) {
+    for (const spec of currentInputSpecs) {
+      const el = document.getElementById('input_' + spec.name);
+      if (el) inputs[spec.name] = el.value;
+    }
+  }
+
   try {
-    const data = await api('POST', `/api/agents/${encodeURIComponent(currentAgent.name)}/run`, { prompt });
+    const body = { inputs };
+    if (prompt) body.prompt = prompt;
+    const data = await api('POST', `/api/agents/${encodeURIComponent(currentAgent.name)}/run`, body);
     if (data.error) { showToast(data.error, 'error'); return; }
-    displayRunOutput(data.registers || {}, data.tokens);
+    displayRunOutput(data.registers || {}, data.tokens, data.progress || '');
   } catch (e) {
     showToast('Failed to run agent', 'error');
   } finally {
@@ -764,9 +1041,20 @@ async function runAgent() {
   }
 }
 
-function displayRunOutput(registers, tokens) {
+function displayRunOutput(registers, tokens, progress) {
   const area = document.getElementById('runOutputArea');
   area.style.display = 'block';
+
+  // Progress
+  const prog = document.getElementById('runProgress');
+  if (progress) {
+    prog.textContent = progress;
+    prog.style.display = '';
+  } else {
+    prog.style.display = 'none';
+  }
+
+  // Tokens
   if (tokens && tokens.length > 0) {
     const t = tokens.map(t => `${t.prompt} prompt → ${t.completion} gen → ${t.total} total`).join('  |  ');
     document.getElementById('runTokens').textContent = '⚡ ' + t;
@@ -774,6 +1062,8 @@ function displayRunOutput(registers, tokens) {
   } else {
     document.getElementById('runTokens').style.display = 'none';
   }
+
+  // Registers
   const out = document.getElementById('runOutput');
   const keys = Object.keys(registers);
   if (keys.length === 0) {

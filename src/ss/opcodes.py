@@ -31,3 +31,9 @@ class Program(BaseModel):
 class InputSpec:
     name: str
     type: str
+
+@dataclass
+class OutputSpec:
+    name: str
+    type: str
+    register: str

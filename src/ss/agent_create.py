@@ -184,7 +184,9 @@ def _call_llm(system_prompt: str, config: dict) -> tuple[str, dict | None]:
 
 def _generate_script(prompt: str, config: dict) -> tuple[str, dict | None]:
     system_msg = AGENT_CREATE_PROMPT.format(prompt=prompt)
-    return _call_llm(system_msg, config)
+    script, tokens = _call_llm(system_msg, config)
+    script = "# prompt: " + prompt.replace("\n", " ") + "\n\n" + script
+    return script, tokens
 
 
 def _modify_script(script: str, instruction: str, config: dict) -> tuple[str, dict | None]:
@@ -218,12 +220,27 @@ How to fix:
 """)
 
 
+def _name_from_prompt(prompt: str) -> str:
+    import re
+    words = re.sub(r"[^\w\s]", "", prompt.lower()).split()
+    # Strip leading noise words
+    noise = {"make", "create", "a", "an", "the", "for", "that", "this", "with", "and", "but", "let", "us", "we", "please", "build"}
+    while words and words[0] in noise:
+        words.pop(0)
+    if not words:
+        words = ["agent"]
+    # Take 3-5 words
+    words = words[:5]
+    name = "_".join(words)
+    return name[:40]
+
+
 def _derive_output_path(prompt: str, file_path: str | None, output_arg: str | None) -> str:
     if output_arg:
         return output_arg
     if file_path:
         return file_path
-    name = prompt.lower().replace(" ", "_").replace("make_a_", "").replace("create_a_", "")[:30]
+    name = _name_from_prompt(prompt)
     return f"{name}.ss"
 
 
