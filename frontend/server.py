@@ -111,10 +111,10 @@ def read_agent(path_str):
     return p.read_text()
 
 
-def write_agent(name, content):
+def write_agent(name, content, *, message=None):
     dest = AGENTS_DIR / f"{name}.ss"
     dest.write_text(content)
-    _git_auto_commit(f"strusky: add/edit agent {name}")
+    _git_auto_commit(message or f"strusky: add/edit agent {name}")
     return dest
 
 
@@ -326,7 +326,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return
             try:
                 name, script, tokens = create_agent_via_llm(prompt)
-                write_agent(name, script)
+                write_agent(name, script, message=prompt)
                 self._json(201, {"name": name, "content": script, "tokens": tokens})
             except Exception as e:
                 logger.error("Create failed: %s", e)
@@ -447,7 +447,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if content is None:
                 self._json(400, {"error": "content is required"})
                 return
-            write_agent(name, content)
+            message = body.get("message")
+            write_agent(name, content, message=message)
             self._json(200, {"name": name, "content": content})
         else:
             self._json(404, {"error": "Not found"})

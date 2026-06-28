@@ -1,253 +1,125 @@
-# strusky / Structured Skills — Agent Guide
+# strusky Language Reference — for Modification Prompts
 
-## Overview
+Use this reference when modifying agents. The LLM knows strusky syntax — your job is to describe what you want clearly. Reference the language features below to be precise.
 
-ss scripts are LLM-powered programs that run on a register-based virtual machine.
-The VM owns all control flow — the LLM only fills in the `infer` prompts.
-MCP (Model Context Protocol) servers provide external tools like web search and file access.
+## Variables & Registers
 
+```ss
+$name = "Alice"              # string
+$count = 42                  # number
+$items = ["a", "b", "c"]     # list (JSON array)
+$flag = True                 # boolean
+$template = "Hello $name"    # string interpolation
 ```
-.ss script → Decoder (regex + LLM) → Opcodes → VM (executor) → Result
-```
 
----
+## Comments
+
+```ss
+# this is a comment
+$prompt = $result  # inline comment
+```
 
 ## Input Declarations
 
-Scripts declare what they need at the top with `input`:
+Scripts declare what they need at the top. You can add, remove, or change these:
 
 ```ss
-input $REPO_FILE as file       # runner reads the file, stores content in $REPO_FILE
+input $REPO_FILE as file       # runner reads file content into the register
 input $USERNAME as string      # plain text
 input $THRESHOLD as number     # numeric value
-input $REPO_URL as repo        # URL (stores as string)
+input $REPO_URL as repo        # URL (stored as string)
 ```
-
-When the script runs, the runner:
-- Reads file content for `file`-typed inputs (from the path or uploaded content)
-- Prompts for any missing values interactively
-- Maps CLI positional args to inputs in order
-
----
 
 ## Output Declarations
 
-Scripts declare what they produce with `output`:
+Scripts declare what they produce:
 
 ```ss
-output $report as report            # structured text output (default)
-output $data as json                # JSON data
-output $report as file: output.md   # writes register to file
-output $result as string            # plain string output
+output $report as report            # structured text (default)
+output $data as json                # JSON
+output $report as file: output.md   # writer register content to file after run
+output $result as string            # plain string
 ```
 
-The output register is included in the final result. For `file`-typed outputs, the runner
-writes the register content to the specified path automatically.
+## Inference
 
----
-
-## MCP Servers (First-Class Objects)
-
-MCP servers provide tools that the script calls. Import them at the top of the script:
+The `infer` keyword sends a prompt to the LLM and stores the response. Keep prompts imperative:
 
 ```ss
-# From a Python package via uvx
-import fetch from uvx://mcp-server-fetch?--ignore-robots-txt
-
-# From an npm package via npx
-import github from npx://@modelcontextprotocol/server-github
-
-# From a JSON config file
-import brave-search from mcp_servers.json
+$summary = infer "Summarize: $text"
+$answer = infer "Compare these two analyses: $a and $b"
 ```
 
-Call them with named arguments:
+## Control Flow
+
+Conditional:
 
 ```ss
-$results = %fetch.fetch url=$url max_length=8000 raw=True
-$info = %github.get_repo owner=$owner repo=$repo
+if $condition:
+    $x = infer "Handle true case: $data"
+else:
+    $x = infer "Handle false case"
+end
 ```
 
-Arguments with `=` are treated as key-value pairs and passed directly to the MCP tool.
-Values are auto-converted: `8000` → integer, `True` → boolean.
-
-Server-level flags go in the import URI query string:
+Loop:
 
 ```ss
-import fetch from uvx://mcp-server-fetch?--ignore-robots-txt&--timeout=30
+for each $item in $items:
+    $analysis = infer "Analyze: $item"
+    %append $all_results $analysis
+end
 ```
-
----
-
-## Built-in Tools
-
-| Tool              | Args                          | Description                    |
-|-------------------|-------------------------------|--------------------------------|
-| `%read`           | `$path`                       | Read file contents             |
-| `%write`          | `$path $data`                 | Overwrite a file               |
-| `%append_to_file` | `$path $data`                 | Append to a file               |
-| `%list_files`     | `$dir`                        | List files in a directory      |
-| `%add`            | `$a $b`                       | Add two numbers                |
-| `%sum`            | `$list`                       | Sum a list of numbers          |
-| `%append`         | `$list $item`                 | Append to an in-memory list    |
-| `%join`           | `$list $sep`                  | Join list items with separator |
-| `%urlencode`      | `$string`                     | URL-encode a string            |
-| `%print`          | `$value`                      | Print to stderr                |
-
----
 
 ## Skills (Functions)
 
-Define reusable blocks with `def` / `end`:
+Define reusable blocks. Registers inside don't leak out (except return):
 
 ```ss
 def search_web $query:
-    $encoded = %urlencode $query
-    $url = "https://lite.duckduckgo.com/lite/?q=$encoded"
-    $results = %fetch.fetch url=$url max_length=8000
+    $results = %fetch.fetch url=$query max_length=8000
     $answer = infer "Extract key facts from: $results"
     return $answer
 end
 
 $answer = %search_web $prompt
-$prompt = $answer
 ```
 
-Skills create a new register scope — registers set inside a skill don't leak to the caller
-(except the return value).
+## MCP Servers
 
----
-
-## Inference
-
-The `infer` keyword sends a prompt to the LLM and stores the response:
+Import servers at the top, then call their tools with named args:
 
 ```ss
-$summary = infer "Summarize the following text in one paragraph: $text"
+import fetch from uvx://mcp-server-fetch?--ignore-robots-txt
+import github from npx://@modelcontextprotocol/server-github
+import brave-search from mcp_servers.json
+
+$results = %fetch.fetch url=$url max_length=8000 raw=True
+$info = %github.get_repo owner=$owner repo=$repo
 ```
 
-Prompts can reference any registers with `$name`. Keep prompts imperative and direct:
-- "Extract the key facts from: $results"
-- "Write a final answer based on: $info"
-- "Compare these two analyses: $a and $b"
+Args with `=` are key-value pairs. Values auto-convert (`8000` → int, `True` → bool). Server flags go in the query string.
 
----
+## Built-in Tools
 
-## Control Flow
+| Tool | Args | Purpose |
+|------|------|---------|
+| `%read` | `$path` | Read file contents |
+| `%write` | `$path $data` | Overwrite a file |
+| `%append_to_file` | `$path $data` | Append to file |
+| `%list_files` | `$dir` | List directory |
+| `%add` | `$a $b` | Add two numbers |
+| `%sum` | `$list` | Sum a list |
+| `%append` | `$list $item` | Append to in-memory list |
+| `%join` | `$list $sep` | Join list items |
+| `%urlencode` | `$string` | URL-encode |
+| `%print` | `$value` | Print to stderr |
 
-Conditionals:
+## Tips for Modification Prompts
 
-```ss
-if $condition:
-    $x = infer "Handle the true case with: $data"
-else:
-    $x = infer "Handle the false case"
-end
-```
-
-Loops:
-
-```ss
-for each $item in $items:
-    $analysis = infer "Analyze this: $item"
-    %append $all_results $analysis
-end
-```
-
----
-
-## Variables and Registers
-
-```ss
-$name = "Alice"              # string
-$count = 42                  # number (auto-converted)
-$items = ["a", "b", "c"]     # list (JSON array)
-$flag = True                 # boolean (auto-converted)
-$template = "Hello $name"    # string interpolation (evaluated at use)
-```
-
----
-
-## Comments
-
-```ss
-# This is a comment
-$prompt = $result  # inline comment
-```
-
----
-
-## Debugging (DAP Protocol)
-
-The VM speaks the Debug Adapter Protocol over TCP (port 4711) or stdio.
-
-```bash
-./run-agent --debug --debug-port 4711 script.ss "query"
-```
-
-Connect any DAP-compatible debugger to set breakpoints, step through code,
-inspect registers, and view the call stack.
-
----
-
-## Agent Creation
-
-Generate an agent from a description:
-
-```bash
-./agent-create "a research agent that searches the web, extracts facts, and writes a report"
-```
-
-Or in the frontend, click "+ New Agent" and describe what you want.
-
-The generated script includes a `# prompt:` comment at the top recording
-the original description, so the file is self-documenting.
-
-Modify an existing agent:
-
-```bash
-# CLI — load and modify
-./agent-create -f agent.ss "add error handling for missing results"
-
-# CLI — interactive REPL
-./agent-create -i agent.ss
-
-# Frontend — Edit tab → type instruction → click Modify
-```
-
----
-
-## Environment
-
-Create a `.env` file in the project root to configure strusky:
-
-```bash
-# strusky environment variables
-# Comma-separated list of strusky options.
-#   git  — auto-commit new/modified agents to git
-STRUSKY_OPTS=git
-```
-
-Options in `STRUSKY_OPTS`:
-
-| Option | Description |
-|--------|-------------|
-| `git`  | Automatically `git add` and `git commit` agents when they are created, modified, or deleted via the frontend |
-
----
-
-## Frontend
-
-Start the web UI:
-
-```bash
-python frontend/server.py
-# → http://localhost:5555
-```
-
-Features:
-- Browse, create, edit, and run agents
-- Type-checked input fields for declared input specs
-- Progress display (fetch size, thinking prompts, token usage)
-- Syntax-highlighted code view (Python-based highlighting)
-- Edit with AI modification prompt
+- **Be specific about what to change**: "Add an input $FOO as file at the top" not "make it better"
+- **Reference existing register names**: "After $results is set, add an inference that extracts links"
+- **Add a new skill with def/end**: "Add a skill called summarize that takes $text and returns a summary"
+- **Change input or output types**: "Change input $X to number instead of string"
+- **Use control flow**: "Wrap the search in an if/else to handle empty $query"
+- **The LLM knows your existing code** — just tell it what to modify

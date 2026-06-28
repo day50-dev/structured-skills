@@ -1015,6 +1015,10 @@ async function modifyAgent() {
       codeEl.textContent = fullScript;
       hljs.highlightElement(codeEl);
       currentAgent.content = fullScript;
+      // auto-save
+      if (currentAgent.editable) {
+        await api('PUT', `/api/agents/${encodeURIComponent(currentAgent.name)}`, { content: fullScript, message: instruction });
+      }
     }
   } catch (e) {
     showToast('Failed to modify agent', 'error');
