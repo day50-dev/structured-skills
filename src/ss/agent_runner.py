@@ -1,10 +1,12 @@
 import sys
+import logging
 import tempfile
 import argparse
 from .decoder import Decoder
 from .vm import VM
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     parser = argparse.ArgumentParser(description="Run an ss agent script with a user prompt")
     parser.add_argument("file", help="The .ss agent script to run")
     parser.add_argument("prompt", nargs="?", default="", help="The input prompt (sets $prompt register)")

@@ -175,6 +175,13 @@ class VM:
                     except Exception as e:
                         print(f"DEBUG: Error writing {path}: {e}")
                         result = f"Error writing {path}: {e}"
+                elif name == "join":
+                    target_list = self.evaluate(args[0])
+                    separator = self.evaluate(args[1]) if len(args) > 1 else "\n"
+                    if isinstance(target_list, list):
+                        result = separator.join(str(i) for i in target_list)
+                    else:
+                        result = str(target_list)
                 elif name == "add":
                     a = float(self.evaluate(args[0]))
                     b = float(self.evaluate(args[1]))
@@ -338,5 +345,7 @@ class VM:
                 except:
                     return value
             if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
-                return value[1:-1]
+                s = value[1:-1]
+                s = s.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "\r").replace('\\"', '"').replace("\\'", "'")
+                return s
         return value

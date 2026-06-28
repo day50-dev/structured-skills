@@ -1,9 +1,11 @@
 import sys
+import logging
 import argparse
 from .decoder import Decoder
 from .vm import VM
 
 def run_script(file_path: str, config_path: str = "config.toml"):
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     with open(file_path, "r") as f:
         lines = f.readlines()
 

@@ -8,63 +8,61 @@ from .config import load_config
 logger = logging.getLogger(__name__)
 
 AGENT_CREATE_PROMPT = """
-You are the Structured Skills Agent Generator. Your job is to generate `.ss` scripts that implement reusable agents.
+You are a code generator for the `.ss` scripting language. Generate ONLY the script code (no markdown, no explanation).
 
-The script must follow this structure:
-1. Optional `import` lines for MCP servers
-2. One or more `def` skills implementing the core logic
-3. A final section that calls the main skill with `$prompt` and writes output
-
-CRITICAL RULES:
-- The generated script must read input from `$prompt` register.
-- The generated script must write its final output to `$prompt` register (so run-agent can display it).
-- Use `def`/`end` to define reusable skills.
-- Use `infer` for LLM reasoning steps.
-- Use `%` prefix for tool calls (MCP or built-in).
-- Use `for each`/`end` for iteration.
-- Use `if`/`else`/`end` for conditionals.
-- Use `return` to return values from skills.
-- Each `def` must end with `end`.
-- Each `for each` must end with `end`.
-- Each `if` must end with `end`.
-- Comments start with `#`.
-
-SYNTAX REFERENCE:
-- $var = "literal"          # Assign string
-- $var = $other             # Copy register
-- $var = ["a", "b"]         # JSON list
-- $var = %tool arg1 arg2    # Call tool (no registers)
-- $var = %tool arg1 -> $reg # Call tool, store in $reg
-- $var = infer "prompt"     # LLM inference
-- def skill $param: ... end # Define reusable skill
-- return $value             # Return from skill
-- for each $item in $list: ... end  # Loop
-- if $cond: ... else: ... end       # Conditional
-- import name from file     # Import MCP server
+LANGUAGE RULES:
+- `$var = "value"` — string assignment
+- `$var = $other` — copy a register
+- `$var = ["a", "b"]` — JSON list literal
+- `$var = infer "prompt with $vars"` — calls an LLM, result stored in $var
+- `$var = %tool arg1 arg2` — calls a tool, result stored in $var
+- `%tool arg1 arg2` — calls a tool (discard result)
+- `def name $param1, $param2:` ... `end` — skill definition
+- `return $value` — return from skill
+- `for each $item in $list:` ... `end` — iterate
+- `if $cond:` ... `else:` ... `end` — conditional
+- Comments start with `#`
 
 BUILT-IN TOOLS (no import needed):
-- %read $path          # Read file
-- %write $path $data   # Write file
-- %append $list $item  # Append to list
-- %list_files $dir     # List directory
-- %add $a $b           # Add numbers
-- %sum $list           # Sum list
+- %read path            # Read file → string
+- %write path data      # Write file
+- %append list item     # Append to list (mutates in place)
+- %join list separator  # Join list items into a string
+- %list_files dir       # List files → JSON list
+- %add a b              # Add numbers
+- %sum list             # Sum a list of numbers
 
-GENERATED SCRIPT TEMPLATE:
-The script should end with something like:
-$result = %my_main_skill $prompt
-$prompt = $result
+CRITICAL RULES FOR CORRECT SCRIPTS:
+1. NEVER hardcode placeholder data. ALL content must come from `infer` calls at runtime.
+2. To build a list from infer results: start with `$list = []`, then `%append $list $item`.
+3. To join a list into a string for further infer calls, use `%join`.
+4. `infer` accepts a prompt string. Reference registers inside it like `"analyze $query"`.
+5. The script receives user input in `$prompt`. It MUST write final output back to `$prompt`.
+6. Script structure: def skills first, then a main section that calls them.
 
-Where my_main_skill is the main entry point skill.
+CORRECT EXAMPLE (research agent):
+```
+def research $topic:
+    $info = infer "Research the topic: $topic. Provide a detailed analysis with facts."
+    return $info
+end
+
+def write_report $content:
+    $report = infer "Write a comprehensive report based on this: $content"
+    return $report
+end
+
+$findings = %research $prompt
+$prompt = %write_report $findings
+```
 
 USER REQUEST: {prompt}
 
 OUTPUT:
-Return ONLY the `.ss` script content. No explanations, no markdown formatting.
-Start with imports if needed, then defs, then the main call.
-"""
+Return ONLY the `.ss` script content. No explanations, no markdown formatting."""
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     parser = argparse.ArgumentParser(description="Generate an ss agent script from a prompt")
     parser.add_argument("prompt", help="Description of the agent to create (e.g. 'make a deep research agent')")
     parser.add_argument("--output", "-o", default=None, help="Output file path (default: derived from prompt)")
