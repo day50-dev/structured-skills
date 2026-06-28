@@ -1,8 +1,11 @@
 import sys
 import json
 import argparse
+import logging
 from openai import OpenAI
 from .config import load_config
+
+logger = logging.getLogger(__name__)
 
 AGENT_CREATE_PROMPT = """
 You are the Structured Skills Agent Generator. Your job is to generate `.ss` scripts that implement reusable agents.
@@ -91,6 +94,11 @@ def main():
                 {"role": "system", "content": AGENT_CREATE_PROMPT.format(prompt=prompt)}
             ]
         )
+        usage = getattr(response, "usage", None)
+        if usage:
+            logger.info("Tokens: %s prompt → %s generated → %s total", usage.prompt_tokens, usage.completion_tokens, usage.total_tokens)
+        else:
+            logger.info("Tokens: (not reported by API)")
     except Exception as e:
         import os
         config_abspath = os.path.abspath(args.config)

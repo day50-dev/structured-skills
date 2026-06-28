@@ -1,4 +1,5 @@
 import json
+import logging
 import subprocess
 import os
 from typing import Dict, Any, List, Optional
@@ -7,6 +8,8 @@ from .opcodes import Opcode, OpcodeType
 from .mcp import MCPManager
 from .config import load_config
 from .skill_loader import LoadedSkill
+
+logger = logging.getLogger(__name__)
 
 class VM:
     def __init__(self, config_path: str = "config.toml"):
@@ -237,6 +240,9 @@ class VM:
                             {"role": "user", "content": evaluated_prompt}
                         ]
                     )
+                    usage = getattr(response, "usage", None)
+                    if usage:
+                        logger.info("Tokens: %s prompt → %s generated → %s total", usage.prompt_tokens, usage.completion_tokens, usage.total_tokens)
                     result = response.choices[0].message.content.strip()
                 except Exception as e:
                     print(f"DEBUG: LLM Inference failed: {e}. Using mock fallback.")
