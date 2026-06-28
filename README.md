@@ -175,9 +175,24 @@ Features: agent list, create, view, edit, and run with live output and token dis
 pip install -e .
 cp config.toml.example config.toml
 # Edit config.toml with your LLM provider (model, base_url, api_key)
+cp .env.example .env       # optional — see STRUSKY_OPTS below
+# Edit .env to enable features like git auto-commit
 ```
 
 Requires Python 3.11+. For web search via MCP, [uvx](https://docs.astral.sh/uv/) is used automatically.
+
+### STRUSKY_OPTS
+
+Set options in `.env` or the environment (comma-separated):
+
+| Option | Description |
+|--------|-------------|
+| `git`  | Auto-commit agent creates, edits, and deletes to git |
+
+```bash
+# .env
+STRUSKY_OPTS=git
+```
 
 ## Project Structure
 

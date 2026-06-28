@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
-"""Start the strusky frontend server."""
+"""Start the strusky frontend server.
+Usage: start-frontend [agents-directory]
+   agents-directory  Path to agent .ss files (default: frontend/agents)
+"""
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+if len(sys.argv) > 1:
+    os.environ["AGENTS_DIR"] = sys.argv[1]
 from frontend.server import main
 main()

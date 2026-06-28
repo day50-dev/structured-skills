@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 strusky = "ss.cli:main"
+strusky-server = "ss.server:main"
 agent-create = "ss.agent_create:main"
 run-agent = "ss.agent_runner:main"
 

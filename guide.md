@@ -217,6 +217,25 @@ Modify an existing agent:
 
 ---
 
+## Environment
+
+Create a `.env` file in the project root to configure strusky:
+
+```bash
+# strusky environment variables
+# Comma-separated list of strusky options.
+#   git  — auto-commit new/modified agents to git
+STRUSKY_OPTS=git
+```
+
+Options in `STRUSKY_OPTS`:
+
+| Option | Description |
+|--------|-------------|
+| `git`  | Automatically `git add` and `git commit` agents when they are created, modified, or deleted via the frontend |
+
+---
+
 ## Frontend
 
 Start the web UI:

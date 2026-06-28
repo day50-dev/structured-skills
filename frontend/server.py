@@ -10,7 +10,7 @@ import urllib.parse
 from pathlib import Path
 from openai import OpenAI
 from ss.config import load_config
-from ss.agent_create import AGENT_CREATE_PROMPT, _fix_script, _name_from_prompt, _modify_script
+from ss.agent_create import AGENT_CREATE_PROMPT, MODIFY_PROMPT, _fix_script, _name_from_prompt, _modify_script
 from ss.decoder import Decoder, parse_input_specs, parse_output_specs
 
 HERE = Path(__file__).resolve().parent
@@ -23,6 +23,41 @@ from ss.vm import VM
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
+# ── .env loading ──────────────────────────────────────────────
+def _load_dotenv(path: Path):
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key, val = key.strip(), val.strip().strip("\"'")
+        os.environ.setdefault(key, val)
+
+_load_dotenv(PROJECT / ".env")
+
+# ── STRUSKY_OPTS ──────────────────────────────────────────────
+_raw_opts = os.environ.get("STRUSKY_OPTS", "")
+STRUSKY_OPTS = {opt.strip() for opt in _raw_opts.split(",") if opt.strip()}
+
+def _git_auto_commit(message: str):
+    if "git" not in STRUSKY_OPTS:
+        return
+    try:
+        import subprocess
+        subprocess.run(["git", "add", "-A"], cwd=str(PROJECT), capture_output=True)
+        result = subprocess.run(
+            ["git", "commit", "--allow-empty", "-m", message],
+            cwd=str(PROJECT), capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            logger.info("git commit: %s", message)
+        elif "nothing to commit" not in result.stderr:
+            logger.debug("git commit skipped: %s", result.stderr.strip())
+    except Exception as exc:
+        logger.warning("git auto-commit failed: %s", exc)
+
 PORT = int(os.environ.get("PORT", 5555))
 AGENTS_DIR_ARG = os.environ.get("AGENTS_DIR")
 if AGENTS_DIR_ARG:
@@ -34,12 +69,17 @@ AGENTS_DIR.mkdir(exist_ok=True)
 
 def discover_agents():
     agents = {}
+    seen = set()
     for d in [AGENTS_DIR, PROJECT / "examples", PROJECT]:
         if not d.is_dir():
             continue
         for f in sorted(d.iterdir()):
-            if f.suffix == ".ss":
-                rel = f.relative_to(PROJECT)
+            if f.suffix == ".ss" and f.stem not in seen:
+                seen.add(f.stem)
+                try:
+                    rel = f.relative_to(PROJECT)
+                except ValueError:
+                    rel = f
                 agents[str(rel)] = {
                     "name": f.stem,
                     "path": str(rel),
@@ -74,6 +114,7 @@ def read_agent(path_str):
 def write_agent(name, content):
     dest = AGENTS_DIR / f"{name}.ss"
     dest.write_text(content)
+    _git_auto_commit(f"strusky: add/edit agent {name}")
     return dest
 
 
@@ -81,6 +122,7 @@ def delete_agent(name):
     dest = AGENTS_DIR / f"{name}.ss"
     if dest.exists():
         dest.unlink()
+        _git_auto_commit(f"strusky: delete agent {name}")
         return True
     return False
 
@@ -156,6 +198,54 @@ def run_agent(name, prompt_text="", inputs=None):
 
     registers = {reg: str(val) for reg, val in vm.registers.items()}
     return registers, vm.token_usage, None, progress
+
+
+def run_code(code_text, inputs=None):
+    lines = code_text.splitlines()
+    config_path = str(PROJECT / "config.toml")
+
+    specs = parse_input_specs(lines)
+
+    assign_lines = []
+    if specs and inputs:
+        for spec in specs:
+            val = inputs.get("$" + spec.name, inputs.get(spec.name, ""))
+            if spec.type == "file" and val:
+                path = val.strip()
+                if os.path.isfile(path):
+                    val = Path(path).read_text()
+            assign_lines.append(f'${spec.name} = "{_escape(val)}"')
+    elif inputs and "$prompt" in inputs:
+        assign_lines.append(f'$prompt = "{_escape(inputs["$prompt"])}"')
+    elif not specs:
+        assign_lines.append('$prompt = ""')
+
+    all_lines = assign_lines + lines
+
+    decoder = Decoder(config_path=config_path)
+    program = []
+    imports = []
+    for line in all_lines:
+        s = line.strip()
+        if s.startswith("import "):
+            imports.append(s)
+    ctx = "\n".join(imports)
+    for line in all_lines:
+        s = line.strip()
+        if not s or s.startswith("#") or s.startswith("input "):
+            continue
+        program.extend(decoder.decode_line(s, imports_context=ctx))
+
+    vm = VM(config_path=config_path)
+    vm.load_program(program)
+
+    buf = io.StringIO()
+    with contextlib.redirect_stderr(buf):
+        vm.run()
+    progress = buf.getvalue()
+
+    registers = {reg: str(val) for reg, val in vm.registers.items()}
+    return registers, vm.token_usage, progress
 
 
 def _escape(s: str) -> str:
@@ -255,6 +345,75 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     self._json(200, {"registers": registers or {}, "tokens": token_usage, "progress": progress})
             except Exception as e:
                 logger.error("Run failed: %s", e)
+                self._json(500, {"error": str(e)})
+        elif parsed.path.endswith("/modify-stream"):
+            parts = parsed.path.split("/")
+            name = parts[3]
+            body = self._body()
+            instruction = body.get("instruction", "")
+            if not instruction:
+                self._json(400, {"error": "instruction is required"})
+                return
+            script_path = _resolve_agent_path(name)
+            if not script_path:
+                self._json(404, {"error": "Agent not found"})
+                return
+            current_script = script_path.read_text()
+            config = load_config(str(PROJECT / "config.toml"))["decoder"]
+            self.send_response(200)
+            self._cors()
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.end_headers()
+            try:
+                client = OpenAI(base_url=config["base_url"], api_key=config["api_key"] or "none")
+                system_msg = MODIFY_PROMPT.format(script=current_script, instruction=instruction)
+                response = client.chat.completions.create(
+                    model=config["model"],
+                    messages=[{"role": "system", "content": system_msg}],
+                    stream=True,
+                )
+                full_text = ""
+                for chunk in response:
+                    delta = chunk.choices[0].delta if chunk.choices else None
+                    if delta:
+                        rc = getattr(delta, 'reasoning_content', None)
+                        if rc:
+                            event = json.dumps({"type": "reasoning", "token": rc})
+                            self.wfile.write(f"data: {event}\n\n".encode())
+                            self.wfile.flush()
+                        if delta.content:
+                            full_text += delta.content
+                            event = json.dumps({"type": "token", "token": delta.content})
+                            self.wfile.write(f"data: {event}\n\n".encode())
+                            self.wfile.flush()
+                usage = getattr(response, "usage", None)
+                tokens = {"prompt": usage.prompt_tokens, "completion": usage.completion_tokens, "total": usage.total_tokens} if usage else None
+                new_script = _fix_script(full_text)
+                event = json.dumps({"type": "done", "script": new_script, "tokens": tokens})
+                self.wfile.write(f"data: {event}\n\n".encode())
+                self.wfile.flush()
+            except Exception as e:
+                logger.error("Modify stream failed: %s", e)
+                event = json.dumps({"type": "error", "error": str(e)})
+                try:
+                    self.wfile.write(f"data: {event}\n\n".encode())
+                    self.wfile.flush()
+                except Exception:
+                    pass
+        elif parsed.path == "/api/serve":
+            body = self._body()
+            code = body.get("code", "")
+            inputs = body.get("input", {})
+            if not code:
+                self._json(400, {"error": "code is required"})
+                return
+            try:
+                registers, token_usage, progress = run_code(code, inputs)
+                self._json(200, {"registers": registers or {}, "tokens": token_usage, "progress": progress})
+            except Exception as e:
+                logger.error("Serve failed: %s", e)
                 self._json(500, {"error": str(e)})
         elif parsed.path.endswith("/modify"):
             parts = parsed.path.split("/")

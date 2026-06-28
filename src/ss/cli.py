@@ -52,6 +52,7 @@ def main():
         print("  ss <file.ss>              Run a script")
         print("  ss create <prompt>        Generate an agent script")
         print("  ss run <file.ss> <prompt>  Run an agent script with input")
+        print("  ss server                 Start the API server")
         print("")
         print("Standalone commands:")
         print("  agent-create <prompt>     Generate an agent script")
@@ -66,6 +67,10 @@ def main():
         from .agent_runner import main as run_main
         sys.argv = sys.argv[1:]
         run_main()
+    elif sys.argv[1] == "server":
+        from .server import main as server_main
+        sys.argv = sys.argv[1:]
+        server_main()
     else:
         parser = argparse.ArgumentParser(description="Structured Skills VM")
         parser.add_argument("file", help="The .ss file to run")
