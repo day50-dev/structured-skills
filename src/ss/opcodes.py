@@ -21,6 +21,7 @@ class OpcodeType(str, Enum):
 class Opcode(BaseModel):
     type: OpcodeType
     params: Dict[str, Any] = {}
+    source_line: Optional[int] = None
 
 class Program(BaseModel):
     lines: List[Opcode]

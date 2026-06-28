@@ -76,9 +76,9 @@ class MCPProcess:
 
     def stop(self):
         if self.process:
-            self._send_notification("exit")
+            self.process.stdin.close()
             try:
-                self.process.wait(timeout=5)
+                self.process.wait(timeout=3)
             except:
                 self.process.kill()
             self.process = None
@@ -90,8 +90,11 @@ class MCPManager:
 
     def add_server(self, name: str, source: str):
         if source.startswith("uvx://"):
-            package = source[len("uvx://"):]
-            command = ["uvx", package]
+            rest = source[len("uvx://"):]
+            parts = rest.split("?", 1)
+            package = parts[0]
+            extra_args = parts[1].split("&") if len(parts) > 1 else []
+            command = ["uvx", package] + extra_args
         elif source.startswith("npx://"):
             package = source[len("npx://"):]
             command = ["npx", package]

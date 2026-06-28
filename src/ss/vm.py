@@ -1,8 +1,10 @@
 import json
+import sys
 import logging
 import subprocess
 import os
-from typing import Dict, Any, List, Optional
+import threading
+from typing import Dict, Any, List, Optional, Callable
 from openai import OpenAI
 from .opcodes import Opcode, OpcodeType
 from .mcp import MCPManager
@@ -32,6 +34,17 @@ class VM:
             api_key=self.config["api_key"] or "none"
         )
 
+        # Debugging support
+        self.debug_mode = False
+        self.breakpoints: set[int] = set()
+        self.step_mode = "none"
+        self.step_target_depth = 0
+        self.pause_requested = False
+        self.waiting = False
+        self.debug_event = threading.Event()
+        self.debug_reason = ""
+        self.stopped_callback: Optional[Callable] = None
+
     def load_program(self, program: List[Opcode]):
         self.program = program
         self.ip = 0
@@ -60,14 +73,73 @@ class VM:
                     self.jump_targets[start_ip] = i
                     self.jump_targets[i] = start_ip
 
+    def current_line(self) -> int:
+        if 0 <= self.ip < len(self.program):
+            return self.program[self.ip].source_line or 0
+        return 0
+
+    def _check_debug(self) -> str:
+        """Check if we should stop. Returns the reason or empty string."""
+        if self.pause_requested:
+            self.pause_requested = False
+            return "pause"
+        line = self.current_line()
+        if line in self.breakpoints:
+            return "breakpoint"
+        if self.step_mode == "over":
+            return "step"
+        if self.step_mode == "in":
+            return "step"
+        if self.step_mode == "out" and len(self.call_stack) < self.step_target_depth:
+            return "step"
+        return ""
+
+    def _wait_for_debugger(self):
+        self.waiting = True
+        self.debug_event.clear()
+        if self.stopped_callback:
+            self.stopped_callback(self.debug_reason, self.current_line(), self.ip)
+        self.debug_event.wait()
+        self.waiting = False
+        self.debug_reason = ""
+
     def run(self):
         try:
             while not self.halted and self.ip < len(self.program):
+                if self.debug_mode:
+                    reason = self._check_debug()
+                    if reason:
+                        self.debug_reason = reason
+                        self._wait_for_debugger()
                 opcode = self.program[self.ip]
                 self.execute(opcode)
                 self.ip += 1
         finally:
             self.mcp.stop_all()
+
+    def step_over(self):
+        self.step_mode = "over"
+        if self.waiting:
+            self.debug_event.set()
+
+    def step_in(self):
+        self.step_mode = "in"
+        if self.waiting:
+            self.debug_event.set()
+
+    def step_out(self):
+        self.step_mode = "out"
+        self.step_target_depth = len(self.call_stack)
+        if self.waiting:
+            self.debug_event.set()
+
+    def continue_run(self):
+        self.step_mode = "none"
+        if self.waiting:
+            self.debug_event.set()
+
+    def pause(self):
+        self.pause_requested = True
 
     def execute(self, opcode: Opcode):
         if opcode.type == OpcodeType.ASSIGN:
@@ -101,8 +173,15 @@ class VM:
                     server_name, tool_name = name.split(".", 1)
 
                 if server_name in self.import_registry:
-                    mcp_args = {"arg" + str(i): self.evaluate(a) for i, a in enumerate(args)}
+                    named_args = opcode.params.get("named_args")
+                    if named_args:
+                        mcp_args = {k: self.evaluate(v) for k, v in named_args.items()}
+                    else:
+                        mcp_args = {"arg" + str(i): self.evaluate(a) for i, a in enumerate(args)}
+                    url = mcp_args.get("url", "")
+                    print(f"  Fetching {url[:80]}...", file=sys.stderr, flush=True)
                     result = self.mcp.call(server_name, tool_name, mcp_args)
+                    print(f"  Got {len(result)} chars from {server_name}.{tool_name}", file=sys.stderr, flush=True)
                 elif server_name in self.loaded_skills:
                     ls = self.loaded_skills[server_name]
                     if tool_name in ls.scripts:
@@ -176,6 +255,10 @@ class VM:
                     except Exception as e:
                         print(f"DEBUG: Error writing {path}: {e}")
                         result = f"Error writing {path}: {e}"
+                elif name == "urlencode":
+                    from urllib.parse import quote
+                    s = str(self.evaluate(args[0]))
+                    result = quote(s, safe="")
                 elif name == "join":
                     target_list = self.evaluate(args[0])
                     separator = self.evaluate(args[1]) if len(args) > 1 else "\n"
@@ -240,6 +323,8 @@ class VM:
                 else:
                     result = "Unknown"
             else:
+                prompt_preview = evaluated_prompt[:120].replace("\n", "\\n")
+                print(f"  Thinking... (prompt: {len(evaluated_prompt)} chars, \"{prompt_preview}...\")", file=sys.stderr, flush=True)
                 try:
                     response = self.client.chat.completions.create(
                         model=self.config["model"],
@@ -339,6 +424,12 @@ class VM:
                 return self.registers.get(value)
             if value == "[]":
                 return []
+            if value == "True":
+                return True
+            if value == "False":
+                return False
+            if value == "None":
+                return None
             if value.startswith("[") and value.endswith("]"):
                 try:
                     return json.loads(value.replace("'", '"'))
@@ -347,5 +438,14 @@ class VM:
             if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
                 s = value[1:-1]
                 s = s.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "\r").replace('\\"', '"').replace("\\'", "'")
+                for reg, val in list(self.registers.items()):
+                    if isinstance(reg, str) and reg.startswith("$"):
+                        s = s.replace(reg, str(val))
                 return s
+            try:
+                if "." in value:
+                    return float(value)
+                return int(value)
+            except (ValueError, TypeError):
+                pass
         return value

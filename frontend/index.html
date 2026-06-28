@@ -270,48 +270,117 @@ header .actions { display: flex; gap: 8px; }
 .btn-sm { padding: 5px 10px; font-size: 12px; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-.modal-overlay.open { opacity: 1; pointer-events: auto; }
-.modal {
+/* Chat Panel */
+.chat-panel {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 24px;
-  width: 520px;
-  max-width: 90vw;
-  max-height: 80vh;
+  margin: 12px 20px;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  max-height: 480px;
+}
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+}
+.chat-header button {
+  background: none;
+  border: none;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.chat-header button:hover { color: var(--text); background: var(--surface2); }
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 200px;
+}
+.chat-msg {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 85%;
+  word-wrap: break-word;
+}
+.chat-msg.user {
+  background: var(--accent);
+  color: #fff;
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+.chat-msg.system {
+  background: var(--surface2);
+  color: var(--text);
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+}
+.chat-msg.system .agent-result {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 6px;
+  font-family: var(--font);
+  font-size: 12px;
+  white-space: pre-wrap;
+  max-height: 200px;
   overflow: auto;
 }
-.modal h2 { font-size: 16px; margin-bottom: 16px; }
-.modal p { font-size: 13px; color: var(--text2); margin-bottom: 16px; line-height: 1.5; }
-.modal textarea {
-  width: 100%;
-  min-height: 100px;
+.chat-msg.system .agent-actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+}
+.chat-msg.system .agent-name {
+  font-weight: 600;
+  color: var(--accent2);
+  margin-bottom: 4px;
+}
+.chat-input-area {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.chat-input-area textarea {
+  flex: 1;
+  padding: 10px 12px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
   font-family: var(--ui-font);
   font-size: 13px;
-  padding: 12px;
-  resize: vertical;
+  resize: none;
   outline: none;
-  margin-bottom: 16px;
+  min-height: 40px;
+  max-height: 120px;
 }
-.modal textarea:focus { border-color: var(--accent); }
-.modal .btns { display: flex; gap: 8px; justify-content: flex-end; }
+.chat-input-area textarea:focus { border-color: var(--accent); }
+.chat-input-area .btn { align-self: flex-end; }
+.chat-spinner {
+  align-self: flex-start;
+  padding: 10px 14px;
+  background: var(--surface2);
+  border-radius: 10px;
+  border-bottom-left-radius: 4px;
+  font-size: 13px;
+  color: var(--text2);
+}
 
 /* Status / Toast */
 .toast {
@@ -384,7 +453,7 @@ header .actions { display: flex; gap: 8px; }
 <header>
   <h1><span>◈</span> strusky</h1>
   <div class="actions">
-    <button class="btn btn-primary" onclick="openCreateModal()">+ New Agent</button>
+    <button class="btn btn-primary" onclick="showCreatePanel()">+ New Agent</button>
     <button class="btn btn-secondary" onclick="refreshList()">⟳</button>
   </div>
 </header>
@@ -399,6 +468,18 @@ header .actions { display: flex; gap: 8px; }
 
   <!-- Main -->
   <main class="main">
+    <!-- Chat Panel (inside main, sidebar-unaffecting) -->
+    <div class="chat-panel" id="chatPanel" style="display:none">
+      <div class="chat-header">
+        <span>Create Agent</span>
+        <button onclick="hideCreatePanel()" title="Close">✕</button>
+      </div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-area">
+        <textarea id="chatInput" placeholder="Describe the agent you want..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMessage()}"></textarea>
+        <button class="btn btn-primary" onclick="sendChatMessage()" id="chatSendBtn">Send</button>
+      </div>
+    </div>
     <div class="main-placeholder" id="placeholder">
       <div class="inner">
         <div class="big-icon">◈</div>
@@ -411,7 +492,6 @@ header .actions { display: flex; gap: 8px; }
       <div class="tab-bar">
         <button class="tab-btn active" onclick="switchTab('view')" id="tabView">View</button>
         <button class="tab-btn" onclick="switchTab('edit')" id="tabEdit">Edit</button>
-        <button class="tab-btn" onclick="switchTab('run')" id="tabRun">Run</button>
       </div>
 
       <!-- View -->
@@ -421,6 +501,16 @@ header .actions { display: flex; gap: 8px; }
           <span id="viewPath" style="font-size:11px;color:var(--text2)"></span>
         </div>
         <div class="code-view" id="codeView"></div>
+        <div style="margin-top:16px">
+          <div class="run-prompt-area">
+            <input type="text" id="runPrompt" placeholder="Enter prompt for the agent..." onkeydown="if(event.key==='Enter') runAgent()">
+            <button class="btn btn-primary" onclick="runAgent()" id="runBtn">Run</button>
+          </div>
+          <div id="runOutputArea" style="display:none">
+            <div id="runTokens" class="token-info"></div>
+            <div class="run-output" id="runOutput"></div>
+          </div>
+        </div>
       </div>
 
       <!-- Edit -->
@@ -435,35 +525,8 @@ header .actions { display: flex; gap: 8px; }
         <textarea class="edit-area" id="editArea" spellcheck="false"></textarea>
       </div>
 
-      <!-- Run -->
-      <div class="tab-content" id="panelRun">
-        <div style="margin-bottom:12px">
-          <div style="font-size:15px;font-weight:600;margin-bottom:8px">Run Agent</div>
-          <div class="run-prompt-area">
-            <input type="text" id="runPrompt" placeholder="Enter prompt for the agent..." onkeydown="if(event.key==='Enter') runAgent()">
-            <button class="btn btn-primary" onclick="runAgent()" id="runBtn">Run</button>
-          </div>
-        </div>
-        <div id="runOutputArea" style="display:none">
-          <div id="runTokens" class="token-info"></div>
-          <div class="run-output" id="runOutput"></div>
-        </div>
-      </div>
     </div>
   </main>
-</div>
-
-<!-- Create Modal -->
-<div class="modal-overlay" id="createModal">
-  <div class="modal">
-    <h2>Create New Agent</h2>
-    <p>Describe what you want the agent to do. The LLM will generate a <code>.ss</code> script.</p>
-    <textarea id="createPrompt" placeholder="e.g. make a research agent that searches the web and writes reports" rows="4"></textarea>
-    <div class="btns">
-      <button class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="createAgent()" id="createBtn">Generate</button>
-    </div>
-  </div>
 </div>
 
 <!-- Toast -->
@@ -567,36 +630,95 @@ function switchTab(tab) {
   document.getElementById(`panel${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.add('active');
 }
 
-// Create agent
-function openCreateModal() {
-  document.getElementById('createModal').classList.add('open');
-  document.getElementById('createPrompt').value = '';
-  document.getElementById('createPrompt').focus();
+// Chat create agent
+function showCreatePanel() {
+  const panel = document.getElementById('chatPanel');
+  panel.style.display = '';
+  const msgs = document.getElementById('chatMessages');
+  msgs.innerHTML = '';
+  addChatMessage('system', 'Describe the agent you want and I\'ll generate it for you.');
+  document.getElementById('chatInput').focus();
 }
 
-function closeCreateModal() {
-  document.getElementById('createModal').classList.remove('open');
+function hideCreatePanel() {
+  document.getElementById('chatPanel').style.display = 'none';
 }
 
-async function createAgent() {
-  const prompt = document.getElementById('createPrompt').value.trim();
-  if (!prompt) { showToast('Please enter a description', 'error'); return; }
-  const btn = document.getElementById('createBtn');
+function addChatMessage(role, text, agent) {
+  const msgs = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  if (role === 'system' && agent) {
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'agent-name';
+    nameDiv.textContent = '⚡ ' + agent.name + '.ss';
+    const pre = document.createElement('pre');
+    pre.className = 'agent-result';
+    pre.textContent = agent.content.slice(0, 500) + (agent.content.length > 500 ? '...' : '');
+    const actions = document.createElement('div');
+    actions.className = 'agent-actions';
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary btn-sm';
+    btn.textContent = 'Accept';
+    btn.addEventListener('click', () => acceptChatAgent(agent.name));
+    actions.appendChild(btn);
+    div.appendChild(nameDiv);
+    div.appendChild(pre);
+    div.appendChild(actions);
+  } else {
+    div.textContent = text;
+  }
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addChatSpinner() {
+  const msgs = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = 'chat-spinner';
+  div.id = 'chatSpinner';
+  div.innerHTML = '<span class="spinner"></span> Generating...';
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function removeChatSpinner() {
+  const s = document.getElementById('chatSpinner');
+  if (s) s.remove();
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.style.height = 'auto';
+  addChatMessage('user', text);
+  addChatSpinner();
+  const btn = document.getElementById('chatSendBtn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Generating...';
   try {
-    const data = await api('POST', '/api/agents', { prompt });
-    if (data.error) { showToast(data.error, 'error'); return; }
-    closeCreateModal();
-    showToast(`Created ${data.name}.ss`, 'success');
-    await refreshList();
-    selectAgent(data.name);
+    const data = await api('POST', '/api/agents', { prompt: text });
+    removeChatSpinner();
+    if (data.error) {
+      addChatMessage('system', 'Error: ' + data.error);
+      return;
+    }
+    addChatMessage('system', '', { name: data.name, content: data.content });
   } catch (e) {
-    showToast('Failed to create agent', 'error');
+    removeChatSpinner();
+    addChatMessage('system', 'Failed to create agent. Is the server running?');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Generate';
+    document.getElementById('chatInput').focus();
   }
+}
+
+async function acceptChatAgent(name) {
+  hideCreatePanel();
+  showToast(`Accepted ${name}.ss`, 'success');
+  await refreshList();
+  selectAgent(name);
 }
 
 // Edit / Save
