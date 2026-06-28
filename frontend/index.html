@@ -6,18 +6,53 @@
 <title>strusky</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
 <style>
+/* Greyscale syntax highlighting overrides */
+.hljs-keyword { color: #b0b0b0 !important; }
+.hljs-string { color: #c8c8c8 !important; }
+.hljs-number { color: #aaaaaa !important; }
+.hljs-comment { color: #666666 !important; font-style: italic; }
+.hljs-built_in { color: #bbbbbb !important; }
+.hljs-literal { color: #999999 !important; }
+.hljs-title { color: #d0d0d0 !important; }
+.hljs-attr { color: #b0b0b0 !important; }
+.hljs-attribute { color: #b0b0b0 !important; }
+.hljs-selector-tag { color: #bbbbbb !important; }
+.hljs-type { color: #aaaaaa !important; }
+.hljs-section { color: #d0d0d0 !important; }
+.hljs-meta { color: #777777 !important; }
+.hljs-meta .hljs-keyword { color: #777777 !important; }
+.hljs-meta .hljs-string { color: #999999 !important; }
+.hljs-addition { color: #8a8a8a !important; }
+.hljs-deletion { color: #8a8a8a !important; }
+.hljs-link { color: #888888 !important; }
+.hljs-template-tag { color: #aaaaaa !important; }
+.hljs-template-variable { color: #aaaaaa !important; }
+.hljs-variable { color: #c0c0c0 !important; }
+.hljs-params { color: #c0c0c0 !important; }
+.hljs-symbol { color: #999999 !important; }
+.hljs-subst { color: #c0c0c0 !important; }
+.hljs-tag { color: #bbbbbb !important; }
+.hljs-name { color: #bbbbbb !important; }
+.hljs-selector-class { color: #b0b0b0 !important; }
+.hljs-selector-id { color: #b0b0b0 !important; }
+.hljs-regexp { color: #aaaaaa !important; }
+.hljs-bullet { color: #999999 !important; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: bold; }
+</style>
+<style>
 :root {
-  --bg: #0f0f1a;
-  --surface: #1a1a2e;
-  --surface2: #252540;
-  --border: #2a2a45;
-  --text: #e0e0f0;
-  --text2: #9090b0;
-  --accent: #6c5ce7;
-  --accent2: #a29bfe;
-  --green: #00b894;
-  --red: #e17055;
-  --orange: #fdcb6e;
+  --bg: #282c34;
+  --surface: #2c3038;
+  --surface2: #353a44;
+  --border: #3e424d;
+  --text: #e0e0e0;
+  --text2: #888888;
+  --accent: #5c6370;
+  --accent2: #7f848e;
+  --green: #4a7a5a;
+  --red: #8a4a4a;
+  --orange: #b8860b;
   --radius: 8px;
   --font: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
   --ui-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
@@ -118,7 +153,7 @@ header .actions { display: flex; gap: 8px; }
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  min-height: 0;
   background: var(--bg);
 }
 .main-placeholder {
@@ -156,8 +191,9 @@ header .actions { display: flex; gap: 8px; }
   color: var(--accent2);
   border-bottom-color: var(--accent);
 }
-.tab-content { flex: 1; overflow: auto; display: none; padding: 20px; }
-.tab-content.active { display: block; height: 100%; }
+#mainContent { min-height: 0; }
+.tab-content { flex: 1; overflow-y: auto; display: none; padding: 20px; min-height: 0; }
+.tab-content.active { display: block; }
 
 /* View Tab */
 .code-view {
@@ -177,7 +213,6 @@ header .actions { display: flex; gap: 8px; }
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
-  background: none;
   padding: 0;
 }
 .code-view .line-number {
@@ -657,10 +692,12 @@ header .actions { display: flex; gap: 8px; }
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <span style="font-size:15px;font-weight:600">Edit</span>
           <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary btn-sm" onclick="showEditHistory()" id="editHistBtn">History</button>
             <button class="btn btn-primary btn-sm" onclick="saveAgent()" id="saveBtn">Save</button>
             <button class="btn btn-secondary btn-sm" onclick="switchTab('view')">Cancel</button>
           </div>
         </div>
+        <div id="editHistPanel" style="display:none;margin-bottom:8px;background:var(--surface2);border-radius:var(--radius);max-height:200px;overflow-y:auto;padding:8px;font-family:var(--font);font-size:12px;border:1px solid var(--border)"></div>
         <div style="display:flex;gap:8px;margin-bottom:12px">
           <input type="text" id="modifyPrompt" placeholder="Tell the AI how to modify this agent..." style="flex:1;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:var(--ui-font);outline:none" onkeydown="if(event.key==='Enter') modifyAgent()">
           <button class="btn btn-secondary btn-sm" onclick="modifyAgent()" id="modifyBtn">Modify</button>
@@ -680,8 +717,7 @@ header .actions { display: flex; gap: 8px; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.4/marked.min.js"></script>
 <script src="strusky.js"></script>
-<script>hljs.highlightAll();
-
+<script>
 // State
 let agents = [];
 let currentAgent = null;
@@ -748,8 +784,7 @@ async function selectAgent(name) {
   const data = await api('GET', `/api/agents/${encodeURIComponent(name)}`);
   if (data.error) { showToast(data.error, 'error'); return; }
   _selecting = true;
-  location.hash = '#agent/' + encodeURIComponent(name);
-  _selecting = false;
+  location.hash = '#view/agent/' + encodeURIComponent(name);
   currentAgent = data;
   currentInputSpecs = strusky.parseInputSpecs(data.content);
   document.getElementById('placeholder').style.display = 'none';
@@ -761,7 +796,7 @@ async function selectAgent(name) {
   // Code view with syntax highlighting
   const codeEl = document.getElementById('codeView');
   codeEl.textContent = data.content;
-  hljs.highlightElement(codeEl);
+  try { hljs.highlightElement(codeEl); } catch (e) { console.warn('highlight:', e); }
 
   // Edit area
   document.getElementById('editArea').value = data.content;
@@ -776,6 +811,7 @@ async function selectAgent(name) {
 
   renderList();
   switchTab(currentTab);
+  _selecting = false;
 }
 
 function renderInputSpecs() {
@@ -784,20 +820,25 @@ function renderInputSpecs() {
     container.style.display = 'none';
     return;
   }
+  const agentKey = currentAgent ? currentAgent.name : '_';
   let html = '';
   for (const spec of currentInputSpecs) {
     const id = 'input_' + escHtml(spec.name);
+    const listId = id + '_list';
+    const history = _getInputHistory(agentKey, spec.name);
+    const lastVal = history.length > 0 ? escHtml(history[0]) : '';
     if (spec.type === 'file') {
       html += `<div class="spec-row">
         <span class="spec-label">${escHtml(spec.name)}</span>
         <span class="spec-type">file</span>
-        <textarea id="${id}" placeholder="Paste file content or enter path..." rows="2"></textarea>
+        <textarea id="${id}" placeholder="Paste file content or enter path..." rows="2">${lastVal}</textarea>
       </div>`;
     } else {
       html += `<div class="spec-row">
         <span class="spec-label">${escHtml(spec.name)}</span>
         <span class="spec-type">${escHtml(spec.type)}</span>
-        <input id="${id}" type="${spec.type === 'number' ? 'number' : 'text'}" placeholder="Enter ${spec.type} value...">
+        <input id="${id}" type="${spec.type === 'number' ? 'number' : 'text'}" placeholder="Enter ${spec.type} value..." list="${listId}" autocomplete="off" value="${lastVal}">
+        <datalist id="${listId}">${history.map(v => `<option value="${escHtml(v)}">`).join('')}</datalist>
       </div>`;
     }
   }
@@ -821,6 +862,9 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
   document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.add('active');
   document.getElementById(`panel${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.add('active');
+  if (currentAgent && !_selecting) {
+    history.replaceState(null, '', `#${tab}/agent/${encodeURIComponent(currentAgent.name)}`);
+  }
 }
 
 // Guide
@@ -851,16 +895,26 @@ function handleHash() {
   const hash = location.hash.slice(1);
   if (hash === 'guide') {
     showGuide();
-  } else if (hash.startsWith('agent/')) {
-    const name = decodeURIComponent(hash.slice(6));
-    selectAgent(name);
   } else {
-    hideGuide();
-    if (!currentAgent) {
-      document.getElementById('placeholder').style.display = 'flex';
-      document.getElementById('mainContent').style.display = 'none';
+    let tab = 'view';
+    let agentName = null;
+    let h = hash;
+    if (h.startsWith('view/')) { tab = 'view'; h = h.slice(5); }
+    else if (h.startsWith('edit/')) { tab = 'edit'; h = h.slice(5); }
+    if (h.startsWith('agent/')) {
+      agentName = decodeURIComponent(h.slice(6));
+    }
+    if (agentName) {
+      selectAgent(agentName);
+      switchTab(tab);
     } else {
-      document.getElementById('mainContent').style.display = 'flex';
+      hideGuide();
+      if (!currentAgent) {
+        document.getElementById('placeholder').style.display = 'flex';
+        document.getElementById('mainContent').style.display = 'none';
+      } else {
+        document.getElementById('mainContent').style.display = 'flex';
+      }
     }
   }
 }
@@ -1011,14 +1065,16 @@ async function modifyAgent() {
     }
     if (fullScript) {
       document.getElementById('editArea').value = fullScript;
-      const codeEl = document.getElementById('codeView');
-      codeEl.textContent = fullScript;
-      hljs.highlightElement(codeEl);
       currentAgent.content = fullScript;
       // auto-save
       if (currentAgent.editable) {
         await api('PUT', `/api/agents/${encodeURIComponent(currentAgent.name)}`, { content: fullScript, message: instruction });
       }
+      // Update code view and show it
+      switchTab('view');
+      const codeEl = document.getElementById('codeView');
+      codeEl.textContent = fullScript;
+      try { hljs.highlightElement(codeEl); } catch (e) { console.warn('highlight:', e); }
     }
   } catch (e) {
     showToast('Failed to modify agent', 'error');
@@ -1026,6 +1082,65 @@ async function modifyAgent() {
     outputEl.style.display = 'none';
     btn.disabled = false;
   }
+}
+
+// Edit history (localStorage)
+function _editHistKey(agentName) {
+  return 'strusky_edit_hist_' + agentName;
+}
+
+function _getEditHistory(agentName) {
+  try {
+    return JSON.parse(localStorage.getItem(_editHistKey(agentName)) || '[]');
+  } catch { return []; }
+}
+
+function _pushEditHistory(agentName, content) {
+  if (!content) return;
+  try {
+    const key = _editHistKey(agentName);
+    let history = JSON.parse(localStorage.getItem(key) || '[]');
+    const entry = { content, saved: Date.now() };
+    // Don't duplicate identical content
+    if (history.length > 0 && history[0].content === content) return;
+    history = [entry, ...history].slice(0, 20);
+    localStorage.setItem(key, JSON.stringify(history));
+  } catch { /* ignore */ }
+}
+
+function showEditHistory() {
+  if (!currentAgent) return;
+  const panel = document.getElementById('editHistPanel');
+  const history = _getEditHistory(currentAgent.name);
+  if (history.length === 0) {
+    panel.innerHTML = '<div style="padding:8px;color:var(--text2)">No saved versions yet.</div>';
+    panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    return;
+  }
+  panel.style.display = panel.style.display === 'none' ? '' : 'none';
+  if (panel.style.display === 'none') return;
+  let html = '<div style="display:flex;flex-direction:column;gap:4px">';
+  for (let i = 0; i < history.length; i++) {
+    const entry = history[i];
+    const preview = entry.content.replace(/\n/g, '↵ ').slice(0, 80);
+    const time = new Date(entry.saved).toLocaleString();
+    const escPrev = escHtml(preview);
+    html += `<div onclick="restoreEditHistory(${i})" style="cursor:pointer;padding:6px 8px;border-radius:4px;background:var(--bg);display:flex;gap:8px;align-items:center" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background='var(--bg)'">
+      <span style="color:var(--text2);white-space:nowrap;font-size:11px">${time}</span>
+      <code style="flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escPrev}</code>
+    </div>`;
+  }
+  html += '</div>';
+  panel.innerHTML = html;
+}
+
+function restoreEditHistory(index) {
+  if (!currentAgent) return;
+  const history = _getEditHistory(currentAgent.name);
+  if (!history[index]) return;
+  document.getElementById('editArea').value = history[index].content;
+  document.getElementById('editHistPanel').style.display = 'none';
+  showToast('Version restored', 'success');
 }
 
 // Edit / Save
@@ -1038,10 +1153,11 @@ async function saveAgent() {
   try {
     const data = await api('PUT', `/api/agents/${encodeURIComponent(currentAgent.name)}`, { content });
     if (data.error) { showToast(data.error, 'error'); return; }
+    _pushEditHistory(currentAgent.name, content);
     currentAgent.content = content;
     const ce = document.getElementById('codeView');
     ce.textContent = content;
-    hljs.highlightElement(ce);
+    try { hljs.highlightElement(ce); } catch (e) { console.warn('highlight:', e); }
     showToast('Saved', 'success');
     switchTab('view');
   } catch (e) {
@@ -1050,6 +1166,27 @@ async function saveAgent() {
     btn.disabled = false;
     btn.textContent = 'Save';
   }
+}
+
+// Input history (localStorage)
+function _inputHistoryKey(agentKey, specName) {
+  return 'strusky_input_' + agentKey + '_' + specName;
+}
+
+function _getInputHistory(agentKey, specName) {
+  try {
+    return JSON.parse(localStorage.getItem(_inputHistoryKey(agentKey, specName)) || '[]');
+  } catch { return []; }
+}
+
+function _saveInputHistory(agentKey, specName, value) {
+  if (!value) return;
+  try {
+    const key = _inputHistoryKey(agentKey, specName);
+    let history = JSON.parse(localStorage.getItem(key) || '[]');
+    history = [value, ...history.filter(v => v !== value)].slice(0, 10);
+    localStorage.setItem(key, JSON.stringify(history));
+  } catch { /* ignore */ }
 }
 
 // Run
@@ -1076,6 +1213,11 @@ async function runAgent() {
     const data = await api('POST', `/api/agents/${encodeURIComponent(currentAgent.name)}/run`, body);
     if (data.error) { showToast(data.error, 'error'); return; }
     displayRunOutput(data.registers || {}, data.tokens, data.progress || '');
+    // Save input history on success
+    const agentKey = currentAgent.name;
+    for (const spec of currentInputSpecs || []) {
+      _saveInputHistory(agentKey, spec.name, inputs[spec.name]);
+    }
   } catch (e) {
     showToast('Failed to run agent', 'error');
   } finally {

@@ -390,7 +390,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             self.wfile.flush()
                 usage = getattr(response, "usage", None)
                 tokens = {"prompt": usage.prompt_tokens, "completion": usage.completion_tokens, "total": usage.total_tokens} if usage else None
-                new_script = _fix_script(full_text)
+                new_script = "# modify: " + body.get("instruction", "").replace("\n", " ") + "\n\n" + _fix_script(full_text)
                 event = json.dumps({"type": "done", "script": new_script, "tokens": tokens})
                 self.wfile.write(f"data: {event}\n\n".encode())
                 self.wfile.flush()

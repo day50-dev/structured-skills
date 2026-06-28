@@ -191,7 +191,9 @@ def _generate_script(prompt: str, config: dict) -> tuple[str, dict | None]:
 
 def _modify_script(script: str, instruction: str, config: dict) -> tuple[str, dict | None]:
     system_msg = MODIFY_PROMPT.format(script=script, instruction=instruction)
-    return _call_llm(system_msg, config)
+    modified, tokens = _call_llm(system_msg, config)
+    modified = "# modify: " + instruction.replace("\n", " ") + "\n\n" + modified
+    return modified, tokens
 
 
 def _print_script(script: str):
