@@ -38,10 +38,20 @@ class MCPProcess:
         line = json.dumps(request) + "\n"
         self.process.stdin.write(line)
         self.process.stdin.flush()
-        response_line = self.process.stdout.readline()
-        if not response_line:
-            raise ConnectionError(f"MCP server {self.name} closed connection")
-        return json.loads(response_line)
+        while True:
+            response_line = self.process.stdout.readline()
+            if not response_line:
+                raise ConnectionError(f"MCP server {self.name} closed connection")
+            stripped = response_line.strip()
+            if not stripped:
+                continue
+            try:
+                obj = json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
+            if obj.get("id") == id:
+                return obj
+            # notifications (progress, logs, etc.) — ignore
 
     def _send_notification(self, method: str, params: dict = None):
         notification = {

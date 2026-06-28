@@ -1,25 +1,78 @@
 import sys
+import os
 import logging
 import tempfile
 import argparse
 import threading
-from .decoder import Decoder
+from .decoder import Decoder, parse_input_specs
 from .vm import VM
 from .dap_server import DAPServer
+
+def _escape(s: str) -> str:
+    return s.replace("\\", "\\\\").replace("\"", "\\\"")
+
+
+def _resolve_input_value(spec, raw: str) -> str:
+    """Convert a raw input value according to the spec type."""
+    if spec.type == "file":
+        path = raw.strip()
+        if path:
+            with open(path) as f:
+                return f.read()
+        return raw
+    return raw
+
+
+def _prompt_for_input(spec, index: int, cli_args: list[str]) -> str | None:
+    """Return a value for this input from CLI args or interactive prompt."""
+    if index < len(cli_args):
+        return _resolve_input_value(spec, cli_args[index])
+
+    label = f"  {spec.name} ({spec.type})"
+    if spec.type == "file":
+        path = input(f"{label}: ").strip()
+        if path:
+            with open(path) as f:
+                return f.read()
+        return ""
+    else:
+        return input(f"{label}: ").strip()
+
+
+def _build_input_lines(original_lines: list[str], cli_inputs: list[str]) -> tuple[list[str], list[str]]:
+    """Build $REG = value lines for each declared input spec.
+    Returns (prepend_lines, remaining_cli_args)."""
+    specs = parse_input_specs(original_lines)
+    if not specs:
+        return [], cli_inputs
+
+    lines = []
+    remaining = list(cli_inputs)
+    for spec in specs:
+        value = _prompt_for_input(spec, 0, remaining)
+        if value is not None and remaining:
+            remaining.pop(0)
+        lines.append(f'${spec.name} = "{_escape(value or "")}"\n')
+
+    return lines, remaining
+
 
 def main():
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    parser = argparse.ArgumentParser(description="Run an ss agent script with a user prompt")
+    parser = argparse.ArgumentParser(
+        description="Run an ss agent script with inputs. If the script declares input specs, "
+                    "they are prompted interactively or filled from positional args."
+    )
     parser.add_argument("file", help="The .ss agent script to run")
-    parser.add_argument("prompt", nargs="?", default="", help="The input prompt (sets $prompt register)")
+    parser.add_argument("prompt", nargs="*", default=[],
+                        help="Input values for declared inputs (positional), then $prompt")
     parser.add_argument("--config", default="config.toml", help="Path to config file (default: %(default)s)")
     parser.add_argument("--debug", action="store_true", help="Start DAP debug server")
     parser.add_argument("--debug-host", default="127.0.0.1", help="DAP server host (default: 127.0.0.1)")
     parser.add_argument("--debug-port", type=int, default=4711, help="DAP server port (default: 4711)")
 
     args = parser.parse_args()
-
     if not args.file:
         parser.print_help()
         sys.exit(1)
@@ -27,11 +80,19 @@ def main():
     with open(args.file, "r") as f:
         original_lines = f.readlines()
 
-    escaped_prompt = args.prompt.replace("\\", "\\\\").replace("\"", "\\\"")
-    prompt_line = f'$prompt = "{escaped_prompt}"\n'
+    # Build input-value assignments from declared input specs + CLI args
+    input_assignments, remaining = _build_input_lines(original_lines, list(args.prompt))
 
-    # Prepend the prompt assignment, then the original script
-    lines = [prompt_line] + original_lines
+    if remaining:
+        prompt_val = " ".join(remaining)
+        input_assignments.append(f'$prompt = "{_escape(prompt_val)}"\n')
+    elif not input_assignments and args.prompt:
+        # No input specs — original behaviour: first arg goes to $prompt
+        prompt_val = " ".join(args.prompt) if isinstance(args.prompt, list) else args.prompt
+        input_assignments.append(f'$prompt = "{_escape(prompt_val)}"\n')
+
+    # Prepend input assignments, then the original script
+    lines = input_assignments + original_lines
 
     decoder = Decoder(config_path=args.config)
 

@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import List, Dict, Any, Optional
+from dataclasses import dataclass
 from pydantic import BaseModel
 
 class OpcodeType(str, Enum):
@@ -25,3 +26,8 @@ class Opcode(BaseModel):
 
 class Program(BaseModel):
     lines: List[Opcode]
+
+@dataclass
+class InputSpec:
+    name: str
+    type: str

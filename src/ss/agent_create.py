@@ -7,46 +7,131 @@ from .config import load_config
 
 logger = logging.getLogger(__name__)
 
-TEMPLATE = """import fetch from uvx://mcp-server-fetch?--ignore-robots-txt
+SYNTAX_GUIDE = """ss (Structured Skills) is a scripting language for building LLM-powered agents.
 
-def research $query:
-    $encoded = %urlencode $query
+VARIABLES: $varname holds strings, numbers, or lists.
+  $greeting = "hello"
+  $count = 42
+  $items = ["a", "b", "c"]
+
+INPUT DECLARATIONS (declare typed inputs the script expects):
+  input $REPO_LIST as file        # runner reads file content on your behalf
+  input $USERNAME as string       # plain text input
+  input $REPO_URL as repo         # GitHub repo URL (prompts user for a URL)
+  input $THRESHOLD as number      # numeric value
+
+PRINTING:
+  %print $varname             # prints the value
+
+IMPORT MCP TOOLS:
+  import fetch from uvx://mcp-server-fetch
+  import github from mcp_servers.json   # or uvx://, npx://
+
+CALL MCP TOOLS with named args:
+  $result = %fetch.fetch url=$url max_length=8000
+
+CALL BUILT-IN TOOLS:
+  $data = %read $path                # read a file
+  %write $path $data                 # write a file
+  %append_to_file $path $data        # append to file
+  %list_files $dir                   # list files in directory
+  $sum = %add $a $b                  # add two numbers
+  $total = %sum $list                # sum a list
+  %append $list $item                # append to list
+  $joined = %join $list $sep         # join list with separator
+  $encoded = %urlencode $string      # URL-encode a string
+
+LLM INFERENCE:
+  $result = infer "Your instruction here, referencing $variables"
+
+SKILLS (functions):
+  def skill_name $param1 $param2:
+      $intermediate = infer "Do something with $param1 and $param2"
+      return $intermediate
+  end
+
+CONDITIONALS:
+  if $condition:
+      ...
+  else:
+      ...
+  end
+
+LOOPS:
+  for each $item in $list:
+      ...
+  end
+
+COMMENTS: # anything after a hash
+
+Inputs are declared at the top of the script with `input $REG as TYPE`.
+The runner prompts for each declared input (or reads them from CLI args).
+The script reads from declared $REGISTERS and writes the final answer back to $prompt."""
+
+AGENT_CREATE_PROMPT = """You are an ss (Structured Skills) code generator. Write a complete .ss script that fulfills the user's request.
+
+SYNTAX REFERENCE:
+""" + SYNTAX_GUIDE + """
+
+Examples of valid ss scripts:
+
+--- 1. Simple search-and-summarize ---
+import fetch from uvx://mcp-server-fetch?--ignore-robots-txt
+$encoded = %urlencode $prompt
+$url = "https://lite.duckduckgo.com/lite/?q=$encoded"
+$results = %fetch.fetch url=$url max_length=8000
+$answer = infer "From these search results ($results), extract the key facts about the query. Write a concise summary."
+$prompt = $answer
+
+--- 2. Multi-step pipeline with skills ---
+import fetch from uvx://mcp-server-fetch?--ignore-robots-txt
+def fetch_results $q:
+    $encoded = %urlencode $q
     $url = "https://lite.duckduckgo.com/lite/?q=$encoded"
     $results = %fetch.fetch url=$url max_length=8000
-    $entries = infer "INSTRUCTION_1_EXTRACT"
-    return $entries
+    return $results
 end
-
-def synthesize $info:
-    $answer = infer "INSTRUCTION_2_ANSWER"
-    return $answer
+def compare $a $b:
+    $analysis = infer "Compare these two sets of results: A: $a B: $b. Find commonalities and differences."
+    return $analysis
 end
+$r1 = %fetch_results $prompt
+$r2 = %fetch_results "additional context $prompt"
+$prompt = %compare $r1 $r2
 
-$initial = %research $prompt
-$prompt = %synthesize $initial"""
+--- 3. Input declarations (typed inputs) ---
+input $REPO_FILE as file
+input $TOKEN as string
+$report = infer "Read the repository data from $REPO_FILE and consider the access token $TOKEN. Write an analysis plan."
+$prompt = $report
 
-AGENT_CREATE_PROMPT = """Replace INSTRUCTION_1_EXTRACT and INSTRUCTION_2_ANSWER in the template below with actual infer prompt strings (2-3 sentences each, imperative mood, referencing $results or $info).
+--- 4. File-processing agent with input ---
+input $DATA_FILE as file
+$content = infer "Read this data: $DATA_FILE. Summarize the key findings."
+$prompt = $content
 
-Example of good INSTRUCTION_1_EXTRACT:
-"From these DuckDuckGo search results ($results), extract the key facts relevant to the query. List them as bullet points. Ignore ads and navigation."
+Rules:
+- Use $prompt for input and write the final answer back to $prompt
+- infer prompts must be imperative, direct, 1-3 sentences
+- Use %name.verb key=value syntax for MCP tool calls
+- Every def must have a matching end
+- Every if/for must have a matching end
+- Output ONLY the raw .ss script, no explanations, no markdown formatting
 
-Example of good INSTRUCTION_2_ANSWER:
-"Based on these extracted facts ($info), write a single clear answer to the original question. Reference $info. Output only the answer."
-
-USER REQUEST: {prompt}
-
-TEMPLATE:
-{TEMPLATE}
-
-OUTPUT ONLY the filled template. No explanations, no markdown formatting."""
+USER REQUEST: {prompt}"""
 
 MODIFY_PROMPT = """Modify the ss script below according to the user's instruction.
 
+SYNTAX REFERENCE:
+""" + SYNTAX_GUIDE + """
+
 Rules:
-- Keep the `import fetch from uvx://mcp-server-fetch?--ignore-robots-txt` line
-- Use `$registers` for data, `%prefix` for calls, `infer "..."` for LLM inference
-- infer prompts should be imperative, 1-3 sentences, referencing $variables
-- Output ONLY the complete modified script, no explanations, no markdown formatting
+- Use $prompt for input and write the final answer back to $prompt
+- infer prompts must be imperative, direct, 1-3 sentences
+- Use %name.verb key=value syntax for MCP tool calls
+- Every def must have a matching end
+- Every if/for must have a matching end
+- Output ONLY the complete modified .ss script, no explanations, no markdown formatting
 
 SCRIPT:
 {script}
@@ -92,16 +177,13 @@ def _call_llm(system_prompt: str, config: dict) -> tuple[str, dict | None]:
     if raw.endswith("```"):
         raw = raw.rsplit("```", 1)[0]
     raw = raw.strip()
-    lines = raw.split("\n")
-    if lines and lines[0].lower().startswith("template"):
-        lines = lines[1:]
-    script = "\n".join(lines).strip()
+    script = raw
     script = _fix_script(script)
     return script, tokens
 
 
 def _generate_script(prompt: str, config: dict) -> tuple[str, dict | None]:
-    system_msg = AGENT_CREATE_PROMPT.format(prompt=prompt, TEMPLATE=TEMPLATE)
+    system_msg = AGENT_CREATE_PROMPT.format(prompt=prompt)
     return _call_llm(system_msg, config)
 
 
