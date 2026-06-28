@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import logging
 import tempfile
 import argparse
@@ -39,19 +40,30 @@ def _prompt_for_input(spec, index: int, cli_args: list[str]) -> str | None:
         return input(f"{label}: ").strip()
 
 
-def _build_input_lines(original_lines: list[str], cli_inputs: list[str]) -> tuple[list[str], list[str]]:
+def _build_input_lines(original_lines: list[str], cli_inputs: list[str],
+                       named_inputs: dict[str, str] | None = None) -> tuple[list[str], list[str]]:
     """Build $REG = value lines for each declared input spec.
+    named_inputs override positional mapping by name.
+    When there are no declared specs, named_inputs are turned into register assignments.
     Returns (prepend_lines, remaining_cli_args)."""
+    named_inputs = named_inputs or {}
     specs = parse_input_specs(original_lines)
+
     if not specs:
-        return [], cli_inputs
+        lines = []
+        for key, val in named_inputs.items():
+            lines.append(f'${key} = "{_escape(str(val))}"\n')
+        return lines, cli_inputs
 
     lines = []
     remaining = list(cli_inputs)
     for spec in specs:
-        value = _prompt_for_input(spec, 0, remaining)
-        if value is not None and remaining:
-            remaining.pop(0)
+        if spec.name in named_inputs:
+            value = _resolve_input_value(spec, named_inputs[spec.name])
+        elif remaining:
+            value = _resolve_input_value(spec, remaining.pop(0))
+        else:
+            value = _prompt_for_input(spec, 0, remaining)
         lines.append(f'${spec.name} = "{_escape(value or "")}"\n')
 
     return lines, remaining
@@ -62,11 +74,15 @@ def main():
     logging.getLogger("httpx").setLevel(logging.WARNING)
     parser = argparse.ArgumentParser(
         description="Run an ss agent script with inputs. If the script declares input specs, "
-                    "they are prompted interactively or filled from positional args."
+                    "they are prompted interactively or filled from positional args or named inputs."
     )
     parser.add_argument("file", help="The .ss agent script to run")
     parser.add_argument("prompt", nargs="*", default=[],
                         help="Input values for declared inputs (positional), then $prompt")
+    parser.add_argument("-i", "--input", action="append", default=[], dest="input_kvs",
+                        help="Named input as key=value (can be repeated)")
+    parser.add_argument("-f", "--input-file", default=None, dest="input_file",
+                        help="JSON file with key/value inputs")
     parser.add_argument("--config", default="config.toml", help="Path to config file (default: %(default)s)")
     parser.add_argument("--debug", action="store_true", help="Start DAP debug server")
     parser.add_argument("--debug-host", default="127.0.0.1", help="DAP server host (default: 127.0.0.1)")
@@ -80,8 +96,21 @@ def main():
     with open(args.file, "r") as f:
         original_lines = f.readlines()
 
-    # Build input-value assignments from declared input specs + CLI args
-    input_assignments, remaining = _build_input_lines(original_lines, list(args.prompt))
+    # Parse named inputs from -i key=value args
+    named_inputs: dict[str, str] = {}
+    for kv in args.input_kvs:
+        if "=" in kv:
+            k, v = kv.split("=", 1)
+            named_inputs[k] = v
+
+    # Parse inputs from JSON file (overrides -i on key conflict)
+    if args.input_file:
+        with open(args.input_file) as f:
+            file_inputs = json.load(f)
+        named_inputs.update(file_inputs)
+
+    # Build input-value assignments from declared input specs + CLI args + named inputs
+    input_assignments, remaining = _build_input_lines(original_lines, list(args.prompt), named_inputs)
 
     if remaining:
         prompt_val = " ".join(remaining)

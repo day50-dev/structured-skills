@@ -10,7 +10,7 @@ import urllib.parse
 from pathlib import Path
 from openai import OpenAI
 from ss.config import load_config
-from ss.agent_create import AGENT_CREATE_PROMPT, MODIFY_PROMPT, _fix_script, _name_from_prompt, _modify_script
+from ss.agent_create import _fix_script, _name_from_prompt
 from ss.decoder import Decoder, parse_input_specs, parse_output_specs
 
 HERE = Path(__file__).resolve().parent
@@ -157,12 +157,28 @@ def delete_agent(name):
     return False
 
 
+_CREATE_SYSTEM = """You are an ss (Structured Skills) code generator. Write a complete .ss script that fulfills the user's request.
+
+LANGUAGE REFERENCE:
+{guide}
+
+Rules:
+- Use $prompt for input and write the final answer back to $prompt
+- infer prompts must be imperative, direct, 1-3 sentences
+- Use %name.verb key=value syntax for MCP tool calls
+- Every def must have a matching end
+- Every if/for must have a matching end
+- Output ONLY the complete .ss script, no explanations, no markdown formatting
+
+USER REQUEST: {prompt}"""
+
 def create_agent_via_llm(prompt):
     config = load_config(str(PROJECT / "config.toml"))["decoder"]
     client = OpenAI(base_url=config["base_url"], api_key=config["api_key"] or "none")
+    guide = _load_guide()
     response = client.chat.completions.create(
         model=config["model"],
-        messages=[{"role": "system", "content": AGENT_CREATE_PROMPT.format(prompt=prompt)}],
+        messages=[{"role": "system", "content": _CREATE_SYSTEM.format(guide=guide, prompt=prompt)}],
     )
     usage = getattr(response, "usage", None)
     tokens = {"prompt": usage.prompt_tokens, "completion": usage.completion_tokens, "total": usage.total_tokens} if usage else None
