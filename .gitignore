@@ -37,7 +37,6 @@ config.toml
 # Project specific test outputs
 tests/locations.list
 tests/math_result.txt
-output.md
 
 # Documentation artifacts
-prd.md
+ss-src
