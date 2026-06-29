@@ -117,6 +117,23 @@ Multiple flags: `uvx://package?--flag1&--flag2`
 | `join`      | `$list $sep`            | Join list items with separator |
 | `urlencode` | `$string`               | URL-encode a string            |
 
+### Agent Creation with Context
+
+The `-c` / `--context` flag feeds reference material into agent generation:
+
+```bash
+# Clone an interface from a URL
+./agent-create -c https://some-saas/docs/llms.txt "clone this interface"
+
+# Use a local spec file
+./agent-create -c ./specs/api-design.md "build a search agent matching these specs"
+
+# Reference a directory of examples
+./agent-create -c ./examples/ "make an agent that follows these patterns"
+```
+
+Accepts URLs (fetched via HTTP), file paths (read as text), or directories (recursively walked, each file prefixed with its relative path). Content is prepended to the generation prompt as reference material.
+
 ### MCP Import Sources
 
 ```ss
@@ -189,6 +206,7 @@ Any DAP-compatible client can connect to the TCP server on port 4711.
 | Command | Description |
 |---------|-------------|
 | `./agent-create <prompt>` | Generate an `.ss` agent script from a description |
+| `./agent-create -c <url\|file\|dir> <prompt>` | Generate with context (URL, file, or directory) |
 | `./run-agent <file.ss> <prompt>` | Run an agent with user input |
 | `./run-agent --debug <file.ss> <prompt>` | Run with DAP debug server |
 | `./ss-debug` | Standalone DAP TCP server |

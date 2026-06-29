@@ -47,6 +47,18 @@ agent-create "make a research agent that searches the web, fetches pages, extrac
 # → research-agent.ss
 ```
 
+**Context flag (`-c`):** Pass reference material (URL, file, or directory) that the LLM uses as instructions. Useful for cloning interfaces or following existing specs:
+
+```bash
+# Clone an API from its llms.txt
+agent-create -c https://example.com/docs/llms.txt "clone this api"
+
+# Build from a local spec
+agent-create -c ./design-spec.md "implement the search agent described here"
+```
+
+When `-c` is a directory, all files are read recursively with their relative paths as headers. The content is prepended to the generation prompt as "Reference material".
+
 ### `run-agent`
 
 Prepends `$prompt = "<user input>"` to the agent script, then runs it through the standard ss pipeline: decoder → opcodes → VM execution.

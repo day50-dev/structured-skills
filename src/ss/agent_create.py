@@ -144,6 +144,42 @@ BUILTIN_TOOLS = {"infer", "read", "write", "append", "join", "list_files", "add"
                  "True", "False", "None"}
 
 
+def _read_context(path_or_url: str) -> str:
+    import urllib.request
+    import os
+    from pathlib import Path
+
+    if path_or_url.startswith(("http://", "https://")):
+        try:
+            req = urllib.request.Request(path_or_url, headers={"User-Agent": "structured-skills/1.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return resp.read().decode("utf-8")
+        except Exception as e:
+            print(f"Error fetching URL: {e}", file=sys.stderr)
+            return ""
+
+    p = Path(path_or_url).expanduser()
+    if not p.exists():
+        print(f"Error: context path not found: {p}", file=sys.stderr)
+        return ""
+
+    if p.is_dir():
+        parts = []
+        for root, dirs, files in os.walk(p):
+            dirs.sort()
+            for f in sorted(files):
+                fp = Path(root) / f
+                try:
+                    content = fp.read_text("utf-8")
+                    rel = fp.relative_to(p)
+                    parts.append(f"--- {rel} ---\n{content}")
+                except (UnicodeDecodeError, OSError):
+                    continue
+        return "\n\n".join(parts)
+
+    return p.read_text("utf-8")
+
+
 def _fix_script(script: str) -> str:
     lines = script.split("\n")
     fixed = []
@@ -257,9 +293,13 @@ def main():
                         help="Interactive REPL for iterative modification")
     parser.add_argument("--file", "-f", default=None,
                         help="Load existing .ss script for modification (implies non-template mode)")
+    parser.add_argument("--context", "-c", default=None,
+                        help="URL, file, or directory to read and use as context/instructions for generation")
 
     args = parser.parse_args()
     config = load_config(args.config)["decoder"]
+
+    context = _read_context(args.context) if args.context else ""
 
     # --- Interactive REPL ---
     if args.interactive:
@@ -268,8 +308,9 @@ def main():
                 script = f.read()
             print(f"Loaded script from {args.file}")
         elif args.prompt:
+            full_prompt = f"Reference material:\n{context}\n\n{args.prompt}" if context else args.prompt
             print(f"Generating agent: {args.prompt}")
-            script, tokens = _generate_script(args.prompt, config)
+            script, tokens = _generate_script(full_prompt, config)
             if tokens:
                 logger.info("Tokens: %s prompt → %s generated → %s total", tokens["prompt"], tokens["completion"], tokens["total"])
         else:
@@ -314,7 +355,9 @@ def main():
             script = f.read()
         print(f"Loaded script from {args.file}")
         instruction = args.prompt or "modify this script"
-        print(f"Modifying: {instruction}")
+        if context:
+            instruction = f"Reference material:\n{context}\n\n{instruction}"
+        print(f"Modifying: {instruction[:80]}...")
         try:
             script, tokens = _modify_script(script, instruction, config)
             if tokens:
@@ -335,9 +378,11 @@ def main():
         sys.exit(1)
 
     prompt = args.prompt
-    output_path = _derive_output_path(prompt, None, args.output)
+    if context:
+        prompt = f"Reference material:\n{context}\n\nPrompt: {prompt}"
+    output_path = _derive_output_path(args.prompt, None, args.output)
 
-    print(f"Generating agent: {prompt}")
+    print(f"Generating agent: {args.prompt}")
 
     try:
         script, tokens = _generate_script(prompt, config)
