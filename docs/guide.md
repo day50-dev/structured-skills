@@ -50,6 +50,29 @@ $summary = infer "Summarize: $text"
 $answer = infer "Compare these two analyses: $a and $b"
 ```
 
+## Recommend (Declarative Retrieval)
+
+The `recommend` keyword selects from a source list using declarative XML criteria. It uses the LLM as a reranker — structural filters run first, then semantic match/reject and ranking are evaluated by the model.
+
+Heredoc form (multi-line):
+
+```ss
+$hits = recommend << END
+<from>$chunks</from>
+<match>answers $question</match>
+<reject>boilerplate</reject>
+<limit>5</limit>
+END
+```
+
+Inline quoted form (single line):
+
+```ss
+$hits = recommend "<from>$chunks</from><match>relevant</match><limit>3</limit>"
+```
+
+See [docs/recommender.md](docs/recommender.md) for the full tag reference (flat form, composed rules with `<rule>`/`<extends>`/`<select>`, structural filters, ranking).
+
 ## Control Flow
 
 Conditional:

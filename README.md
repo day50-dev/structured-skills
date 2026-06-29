@@ -52,7 +52,7 @@ The highest mountain peak in North America is Denali. ...
 
 ## Language Syntax
 
-ss uses `$registers` for data, `%prefix` for tool/skill calls, and `infer` for LLM inference. MCP tools are imported at the top of the script.
+ss uses `$registers` for data, `%prefix` for tool/skill calls, `infer` for LLM generation, and `recommend` for declarative retrieval/reranking. MCP tools are imported at the top of the script.
 
 ```ss
 import fetch from uvx://mcp-server-fetch?--ignore-robots-txt
@@ -66,7 +66,17 @@ def research $query:
 end
 
 $initial = %research $prompt
-$answer = infer "Based on $initial, write a final answer."
+
+# Declarative reranking — selects relevant items using LLM
+$hits = recommend << END
+<from>$initial</from>
+<match>directly answers $prompt</match>
+<reject>tangential or boilerplate</reject>
+<rank by="similarity" context="$prompt"/>
+<limit>3</limit>
+END
+
+$answer = infer "Based on $hits, write a final answer."
 ```
 
 ### MCP Tool Calls with Named Arguments
@@ -167,7 +177,7 @@ All output (Fetching, Thinking, results, tokens) goes to stderr/stdout with full
 ```
 
 - **Decoder** (`src/ss/decoder.py`): Regex for structures (`def`/`if`/`for`), LLM fallback for "vibe" lines.
-- **Opcodes** (`src/ss/opcodes.py`): 13-opcode IR (ASSIGN, CALL, INFER, LOOP, IF, ELSE, DEF, RETURN, IMPORT, LOAD_SKILL, JUMP, HALT).
+- **Opcodes** (`src/ss/opcodes.py`): 14-opcode IR (ASSIGN, CALL, INFER, RECOMMEND, LOOP, IF, ELSE, DEF, RETURN, IMPORT, LOAD_SKILL, JUMP, HALT).
 - **VM** (`src/ss/vm.py`): Register-based with call stack, loop stack, jump targets, MCP integration, token tracking, and DAP debug support.
 - **MCP** (`src/ss/mcp.py`): Manages MCP server processes (launch via uvx/npx/json, call tools, shutdown).
 - **Agent Create** (`src/ss/agent_create.py`): Free-form agent generator - LLM writes code from scratch using a syntax guide rather than filling placeholders.

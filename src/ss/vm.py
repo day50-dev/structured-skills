@@ -347,9 +347,6 @@ class VM:
         elif opcode.type == OpcodeType.RECOMMEND:
             register = opcode.params.get("register")
             block = opcode.params.get("block", "")
-            for reg, val in list(self.registers.items()):
-                if isinstance(reg, str) and reg.startswith("$"):
-                    block = block.replace(reg, str(val))
             result = self._execute_recommend(block)
             if register and register.startswith("$"):
                 self.registers[register] = result
@@ -432,7 +429,34 @@ class VM:
     def _execute_recommend(self, block: str) -> list:
         import re
 
+        def _rs(text: str) -> str:
+            """Resolve $register references in a string."""
+            for reg, val in list(self.registers.items()):
+                if isinstance(reg, str) and reg.startswith("$"):
+                    text = text.replace(reg, str(val))
+            return text
+
         block = block.strip()
+
+        # --- Resolve register references in <from> tags only (others resolved later for LLM) ---
+        def _resolve_source(src: str) -> list:
+            """Resolve a <from> source to a list of items."""
+            src = src.strip()
+            if src.startswith("$"):
+                val = self.registers.get(src)
+                if isinstance(val, list):
+                    return list(val)
+                if isinstance(val, str):
+                    try:
+                        parsed = json.loads(val)
+                        if isinstance(parsed, list):
+                            return parsed
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                    return [val]
+                if val is not None:
+                    return [val]
+            return []
 
         # --- Sources ---
         sources = re.findall(r'<from>(.*?)</from>', block)
