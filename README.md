@@ -12,7 +12,7 @@ Strusky makes building these agents easy:
 
 Control-flow is done through a classical VM using instruction pointers, opcodes, and a set of primitives with a notable exception. Instead of a virtual ALU, the LLM is the ALU and uses structured output to control the program. This allows for primitives not to be classic boolean logic but instead to be language and structure based. MCPs (imported via `import X from uvx://...`) and skills (imported via `import file.md` or `load skill path as alias`) are all first-class objects with register access and `%` callable syntax. The transformer is the foundational unit of computation for the fuzzy tasks.
 
-Recommender systems are specificed using declarative programming paradigms, punting the actual SOTA mechanics to be both out of scope and flexible. It uses structured input and output. The [docs](/docs/recommender.md)
+Recommender systems are specificed using declarative programming paradigms, punting the actual SOTA mechanics to be both out of scope and flexible. It uses structured input and output. Read the [docs](/docs/recommender.md).
 
 The Agency part of the agent is the emergent property of these because models are fundamentally stateless systems. Context merely provides the illusion of state. So strusky exploits the true tabulea rasa nature of models as much as possible.
 
