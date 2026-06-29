@@ -4,6 +4,8 @@
 <a href=https://pypi.org/project/strusky><img src=https://badge.fury.io/py/strusky.svg/></a>
 </p>
 
+https://github.com/user-attachments/assets/6f8a37fb-4082-4cf8-99ff-b33a46e77c84
+
 ### Agents are context-rich recommender systems with agency and control flow.
 
 Let's break that down. Agents use recommendation systems based on context to take action on someone's behalf. 
@@ -53,6 +55,7 @@ The highest mountain peak in North America is Denali. ...
   Infer 2: 410 in → 430 out (840 total)
   Total: 3830
 ```
+
 
 ## Language Syntax
 
