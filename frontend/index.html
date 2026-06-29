@@ -707,8 +707,9 @@ header .actions { display: flex; gap: 8px; }
 
       <!-- Edit -->
       <div class="tab-content" id="panelEdit">
-        <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <span style="font-size:15px;font-weight:600">Edit</span>
+          <button class="btn btn-secondary btn-sm" onclick="showEditHistory()" id="editHistBtn">History</button>
         </div>
         <div id="editHistPanel" style="display:none;margin-bottom:8px;background:var(--surface2);border-radius:var(--radius);max-height:200px;overflow-y:auto;padding:8px;font-family:var(--font);font-size:12px;border:1px solid var(--border)"></div>
         <div style="display:flex;gap:8px;margin-bottom:12px">
@@ -718,7 +719,6 @@ header .actions { display: flex; gap: 8px; }
         <div id="modifyOutput" style="display:none;margin-bottom:8px;background:var(--surface2);border-radius:var(--radius);max-height:160px;overflow-y:auto;padding:10px 14px;font-family:var(--font);font-size:12px;line-height:1.5;white-space:pre-wrap;color:var(--text2)"></div>
         <textarea class="edit-area" id="editArea" spellcheck="false"></textarea>
         <div style="display:flex;gap:8px;margin-top:12px">
-          <button class="btn btn-secondary btn-sm" onclick="showEditHistory()" id="editHistBtn">History</button>
           <button class="btn btn-primary btn-sm" onclick="saveAgent()" id="saveBtn">Save</button>
           <button class="btn btn-secondary btn-sm" onclick="switchTab('run')">Cancel</button>
         </div>
@@ -1102,6 +1102,7 @@ async function modifyAgent() {
               outputEl.scrollTop = outputEl.scrollHeight;
             } else if (data.type === 'done') {
               fullScript = data.script;
+              document.getElementById('editArea').value = fullScript;
               if (data.tokens) {
                 showToast(`Modified — ${data.tokens.prompt} in → ${data.tokens.completion} out`, 'success');
               } else {
@@ -1130,6 +1131,7 @@ async function modifyAgent() {
       // auto-save
       if (currentAgent.editable) {
         await api('PUT', `/api/agents/${encodeURIComponent(currentAgent.name)}`, { content: fullScript, message: instruction });
+        _pushEditHistory(currentAgent.name, fullScript);
       }
     }
   } catch (e) {
