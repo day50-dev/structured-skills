@@ -236,6 +236,11 @@ guide.md              Language reference (injected into LLM prompts)
 start-frontend        Entry point script
 ```
 
+## Documentation
+
+- [docs/server.md](docs/server.md) — API server reference (endpoints, request/response formats, CLI flags)
+- [docs/strusky.js.md](docs/strusky.js.md) — Client-side JS library (`parseInputSpecs`, `parseOutputSpecs`, `serve`)
+
 ## License
 
 MIT

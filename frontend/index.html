@@ -684,9 +684,12 @@ header .actions { display: flex; gap: 8px; }
 
       <!-- Run -->
       <div class="tab-content active" id="panelRun">
-        <div id="runHeader" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <span id="runName" style="font-size:15px;font-weight:600"></span>
-          <span id="runPath" style="font-size:11px;color:var(--text2)"></span>
+        <div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span id="runName" style="font-size:15px;font-weight:600"></span>
+            <span id="runPath" style="font-size:11px;color:var(--text2)"></span>
+          </div>
+          <span id="runDate" style="font-size:11px;color:var(--text2);margin-top:3px;display:block"></span>
         </div>
         <pre class="code-view"><code class="language-python" id="codeView"></code></pre>
         <div style="margin-top:16px">
@@ -704,13 +707,8 @@ header .actions { display: flex; gap: 8px; }
 
       <!-- Edit -->
       <div class="tab-content" id="panelEdit">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="margin-bottom:12px">
           <span style="font-size:15px;font-weight:600">Edit</span>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-secondary btn-sm" onclick="showEditHistory()" id="editHistBtn">History</button>
-            <button class="btn btn-primary btn-sm" onclick="saveAgent()" id="saveBtn">Save</button>
-            <button class="btn btn-secondary btn-sm" onclick="switchTab('run')">Cancel</button>
-          </div>
         </div>
         <div id="editHistPanel" style="display:none;margin-bottom:8px;background:var(--surface2);border-radius:var(--radius);max-height:200px;overflow-y:auto;padding:8px;font-family:var(--font);font-size:12px;border:1px solid var(--border)"></div>
         <div style="display:flex;gap:8px;margin-bottom:12px">
@@ -719,6 +717,11 @@ header .actions { display: flex; gap: 8px; }
         </div>
         <div id="modifyOutput" style="display:none;margin-bottom:8px;background:var(--surface2);border-radius:var(--radius);max-height:160px;overflow-y:auto;padding:10px 14px;font-family:var(--font);font-size:12px;line-height:1.5;white-space:pre-wrap;color:var(--text2)"></div>
         <textarea class="edit-area" id="editArea" spellcheck="false"></textarea>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn btn-secondary btn-sm" onclick="showEditHistory()" id="editHistBtn">History</button>
+          <button class="btn btn-primary btn-sm" onclick="saveAgent()" id="saveBtn">Save</button>
+          <button class="btn btn-secondary btn-sm" onclick="switchTab('run')">Cancel</button>
+        </div>
       </div>
 
     </div>
@@ -804,7 +807,7 @@ function renderList() {
     list.innerHTML = '<div class="empty-state"><div class="icon">◈</div><p>No agents yet.<br>Create one to get started.</p></div>';
     return;
   }
-  list.innerHTML = agents.map(a => {
+  list.innerHTML = agents.slice().sort((a, b) => (b.modified || 0) - (a.modified || 0)).map(a => {
     const active = currentAgent && a.name === currentAgent.name ? 'active' : '';
     const icon = a.path.startsWith('examples') ? '📖' : a.path.startsWith('agents') ? '⚡' : '📄';
     return `<div class="agent-item ${active}" onclick="selectAgent('${a.name}')">
@@ -830,6 +833,14 @@ async function selectAgent(name) {
     mc.style.display = 'flex';
     document.getElementById('runName').textContent = data.name;
     document.getElementById('runPath').textContent = data.path + (data.editable ? '' : ' (read-only)');
+    if (data.modified) {
+      const d = new Date(data.modified * 1000);
+      const pad = (n) => String(n).padStart(2, '0');
+      document.getElementById('runDate').textContent =
+        `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    } else {
+      document.getElementById('runDate').textContent = '';
+    }
 
   // Edit area
   document.getElementById('editArea').value = data.content;

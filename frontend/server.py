@@ -71,7 +71,7 @@ _GUIDE_CACHE = None
 def _load_guide() -> str:
     global _GUIDE_CACHE
     if _GUIDE_CACHE is None:
-        p = PROJECT / "guide.md"
+        p = PROJECT / "docs/guide.md"
         if p.exists():
             _GUIDE_CACHE = p.read_text()
         else:
@@ -334,7 +334,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             config = load_config(str(config_path))
             self._json(200, config)
         elif parsed.path == "/api/guide":
-            guide_path = PROJECT / "guide.md"
+            guide_path = PROJECT / "docs/guide.md"
             if guide_path.exists():
                 self._json(200, {"content": guide_path.read_text()})
             else:
@@ -356,6 +356,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             "content": content,
                             "path": info["path"],
                             "editable": editable,
+                            "modified": info["modified"],
                             "input_specs": in_specs,
                             "output_specs": out_specs,
                         })
