@@ -18,7 +18,7 @@ The agency is the emergent property of these. This programming languages is desi
 
 This isn't experimental. It works. 
 
-As a more formal introduction, **Strusky** is a stack-based virtual machine for orchestrating LLM-powered programs. It gives LLMs the equivalent of structured programming-loops, conditionals, variables, function calls-while keeping the model strictly out of control flow decisions. MCP (Model Context Protocol) servers provide external tools like web search and fetching. This paradigm is called "structured skills".
+As a more formal introduction, **Strusky** is a stack-based virtual machine for orchestrating LLM-powered programs. It gives LLMs the equivalent of structured programming-loops, conditionals, variables, function calls-while keeping the model strictly out of control flow decisions. MCP servers provide external tools like web search and fetching. This paradigm is called "structured skills".
 
 <img alt="Logic-Based_LLM_Agent_Orchestration" src="https://github.com/user-attachments/assets/4566bee1-b542-4897-9bc5-c21a2c33bef3" />
 
