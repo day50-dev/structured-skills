@@ -4,8 +4,10 @@ import sys
 import io
 import json
 import re
+import uuid
 import logging
 import contextlib
+import threading
 import http.server
 import urllib.parse
 from pathlib import Path
@@ -204,31 +206,29 @@ def create_agent_via_llm(prompt):
     return name, script, tokens
 
 
-def run_agent(name, prompt_text="", inputs=None):
+def _build_program(name, inputs=None, prompt_text=""):
+    """Resolve agent, build source lines and program. Returns (lines, pp_lines, program, config_path) or raises."""
     script_path = _resolve_agent_path(name)
     if not script_path:
-        return None, None, "Agent not found", ""
+        raise ValueError("Agent not found")
 
     original_lines = script_path.read_text().splitlines()
     config_path = str(PROJECT / "config.toml")
 
-    # Parse input specs from the script
     specs = parse_input_specs(original_lines)
-
-    # Build register assignment lines
     assign_lines = []
     if specs and inputs:
         for spec in specs:
             val = inputs.get(spec.name, "")
             if spec.type == "file" and val:
-                path = val.strip()
-                if os.path.isfile(path):
-                    val = Path(path).read_text()
+                p = val.strip()
+                if os.path.isfile(p):
+                    val = Path(p).read_text()
             assign_lines.append(f'${spec.name} = "{_escape(val)}"')
     elif prompt_text:
         assign_lines.append(f'$prompt = "{_escape(prompt_text)}"')
     elif not specs:
-        assign_lines.append(f'$prompt = ""')
+        assign_lines.append('$prompt = ""')
 
     lines = assign_lines + original_lines
 
@@ -240,11 +240,21 @@ def run_agent(name, prompt_text="", inputs=None):
         if s.startswith("import "):
             imports.append(s)
     ctx = "\n".join(imports)
-    for line in preprocess_lines(lines):
+    pp_lines = preprocess_lines(lines)
+    for line in pp_lines:
         s = line.strip()
         if not s or s.startswith("#") or s.startswith("input "):
             continue
         program.extend(decoder.decode_line(s, imports_context=ctx))
+
+    return lines, pp_lines, program, config_path
+
+
+def run_agent(name, prompt_text="", inputs=None):
+    try:
+        lines, pp_lines, program, config_path = _build_program(name, inputs, prompt_text)
+    except ValueError as e:
+        return None, None, str(e), ""
 
     vm = VM(config_path=config_path)
     vm.load_program(program)
@@ -333,6 +343,165 @@ def _apply_edits(script: str, edit_text: str) -> str:
     return result
 
 
+# ── Debug Session ────────────────────────────────────────────
+class DebugSession:
+    def __init__(self, agent_name: str, source_lines: list, program: list, config_path: str):
+        self.agent_name = agent_name
+        self.source_lines = source_lines
+        self.program = program
+        self.session_id = uuid.uuid4().hex[:8]
+
+        self.vm = VM(config_path=config_path)
+        self.vm.load_program(program)
+        self.vm.debug_mode = True
+        self.vm.stopped_callback = self._on_stopped
+        self.vm.step_mode = "over"
+
+        self.lock = threading.Lock()
+        self._state_version = 0
+        self.state = {
+            "status": "starting",
+            "current_line": None,
+            "current_ip": 0,
+            "reason": "",
+            "registers": {},
+            "breakpoints": [],
+            "call_stack": [],
+            "halted": False,
+            "version": 0,
+        }
+        self._subscribers: list[threading.Event] = []
+
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def _build_state(self):
+        state = {
+            "status": self.state["status"],
+            "current_line": self.vm.current_line(),
+            "current_ip": self.vm.ip,
+            "reason": self.state["reason"],
+            "registers": {k: str(v) for k, v in self.vm.registers.items()},
+            "breakpoints": sorted(self.vm.breakpoints),
+            "call_stack": [],
+            "halted": self.vm.halted or False,
+            "version": self._state_version,
+        }
+        for frame in self.vm.call_stack:
+            rip = frame["return_ip"]
+            src = self.program[rip].source_line if 0 <= rip < len(self.program) else None
+            state["call_stack"].append({
+                "return_ip": rip,
+                "source_line": src,
+                "target_register": frame.get("target_register", ""),
+            })
+        return state
+
+    def _on_stopped(self, reason: str, line: int, ip: int):
+        with self.lock:
+            self._state_version += 1
+            self.state["status"] = "paused"
+            self.state["current_line"] = line
+            self.state["current_ip"] = ip
+            self.state["reason"] = reason
+            self.state["halted"] = False
+        self._notify()
+
+    def _run(self):
+        try:
+            self.vm.run()
+        finally:
+            with self.lock:
+                self._state_version += 1
+                self.state["status"] = "finished"
+                self.state["halted"] = True
+                self.state["current_line"] = self.vm.current_line()
+                self.state["current_ip"] = self.vm.ip
+            self._notify()
+
+    def get_state(self) -> dict:
+        with self.lock:
+            s = self._build_state()
+            self.state.update(s)
+            return dict(self.state)
+
+    def command(self, cmd: str, arg: str = None):
+        with self.lock:
+            if cmd == "step":
+                self.state["status"] = "running"
+                self.vm.step_over()
+            elif cmd == "step_in":
+                self.state["status"] = "running"
+                self.vm.step_in()
+            elif cmd == "step_out":
+                self.state["status"] = "running"
+                self.vm.step_out()
+            elif cmd == "continue":
+                self.state["status"] = "running"
+                self.vm.continue_run()
+            elif cmd == "break":
+                if arg is not None:
+                    try:
+                        self.vm.breakpoints.add(int(arg))
+                    except ValueError:
+                        pass
+            elif cmd == "clear":
+                if arg is not None:
+                    try:
+                        self.vm.breakpoints.discard(int(arg))
+                    except ValueError:
+                        pass
+            elif cmd == "stop":
+                self.vm.halted = True
+                self.vm.continue_run()
+
+    def subscribe(self) -> threading.Event:
+        evt = threading.Event()
+        with self.lock:
+            self._subscribers.append(evt)
+        return evt
+
+    def unsubscribe(self, evt: threading.Event):
+        with self.lock:
+            self._subscribers = [e for e in self._subscribers if e is not evt]
+
+    def _notify(self):
+        with self.lock:
+            subs = list(self._subscribers)
+        for evt in subs:
+            evt.set()
+
+
+class DebugSessionManager:
+    def __init__(self):
+        self._sessions: dict[str, DebugSession] = {}
+        self._lock = threading.Lock()
+
+    def create(self, agent_name: str, source_lines: list, program: list, config_path: str) -> DebugSession:
+        s = DebugSession(agent_name, source_lines, program, config_path)
+        with self._lock:
+            self._sessions[s.session_id] = s
+        return s
+
+    def get(self, session_id: str) -> DebugSession | None:
+        with self._lock:
+            return self._sessions.get(session_id)
+
+    def remove(self, session_id: str):
+        with self._lock:
+            self._sessions.pop(session_id, None)
+
+    def cleanup_stale(self):
+        with self._lock:
+            stale = [sid for sid, s in list(self._sessions.items())
+                     if s.state.get("halted") or s.state.get("status") == "finished"]
+            for sid in stale:
+                self._sessions.pop(sid, None)
+
+
+_session_manager = DebugSessionManager()
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(HERE), **kwargs)
@@ -377,6 +546,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json(200, {"content": guide_path.read_text()})
             else:
                 self._json(404, {"error": "Guide not found"})
+        elif parsed.path.startswith("/api/debug/"):
+            parts = parsed.path.split("/")
+            if len(parts) >= 4 and parts[3]:
+                session_id = parts[3]
+                session = _session_manager.get(session_id)
+                if session:
+                    self._json(200, session.get_state())
+                else:
+                    self._json(404, {"error": "Session not found"})
+            else:
+                self._json(400, {"error": "Missing session_id"})
         elif parsed.path.startswith("/api/agents/"):
             name = parsed.path[len("/api/agents/"):]
             for rel, info in discover_agents().items():
@@ -514,6 +694,38 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json(200, {"registers": registers or {}, "tokens": token_usage, "progress": progress})
             except Exception as e:
                 logger.error("Serve failed: %s", e)
+                self._json(500, {"error": str(e)})
+        elif parsed.path.endswith("/debug"):
+            parts = parsed.path.split("/")
+            name = parts[3]
+            body = self._body()
+            inputs = body.get("inputs", {})
+            try:
+                lines, pp_lines, program, config_path = _build_program(name, inputs)
+                session = _session_manager.create(name, pp_lines, program, config_path)
+                state = session.get_state()
+                state["source_lines"] = pp_lines
+                self._json(200, state)
+            except ValueError as e:
+                self._json(404, {"error": str(e)})
+            except Exception as e:
+                logger.error("Debug start failed: %s", e)
+                self._json(500, {"error": str(e)})
+        elif parsed.path.startswith("/api/debug/") and parsed.path.endswith("/command"):
+            parts = parsed.path.split("/")
+            session_id = parts[3] if len(parts) >= 4 else ""
+            session = _session_manager.get(session_id)
+            if not session:
+                self._json(404, {"error": "Session not found"})
+                return
+            body = self._body()
+            cmd = body.get("command", "")
+            arg = body.get("arg")
+            try:
+                session.command(cmd, arg)
+                self._json(200, {"ok": True})
+            except Exception as e:
+                logger.error("Debug command failed: %s", e)
                 self._json(500, {"error": str(e)})
         elif parsed.path.endswith("/modify"):
             parts = parsed.path.split("/")
