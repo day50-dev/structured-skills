@@ -5,9 +5,10 @@ import logging
 import tempfile
 import argparse
 import threading
-from .decoder import Decoder, parse_input_specs
+from .decoder import Decoder, parse_input_specs, preprocess_lines
 from .vm import VM
 from .dap_server import DAPServer
+from .debug_repl import DebugREPL
 
 def _escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace("\"", "\\\"")
@@ -142,7 +143,8 @@ def main():
     if skills_context:
         full_context += "\n" + skills_context
 
-    for line_num, line in enumerate(lines, start=1):
+    pp_lines = preprocess_lines(lines)
+    for line_num, line in enumerate(pp_lines, start=1):
         if not line.strip() or line.strip().startswith("#"):
             continue
         opcodes = decoder.decode_line(line, imports_context=full_context, line_number=line_num)

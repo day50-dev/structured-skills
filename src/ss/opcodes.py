@@ -7,6 +7,7 @@ class OpcodeType(str, Enum):
     ASSIGN = "ASSIGN"
     CALL = "CALL"
     INFER = "INFER"
+    RECOMMEND = "RECOMMEND"
     LOOP = "LOOP"
     END = "END"
     IF = "IF"

@@ -1,7 +1,7 @@
 import sys
 import logging
 import argparse
-from .decoder import Decoder
+from .decoder import Decoder, preprocess_lines
 from .vm import VM
 
 def run_script(file_path: str, config_path: str = "config.toml"):
@@ -28,7 +28,8 @@ def run_script(file_path: str, config_path: str = "config.toml"):
     if skills_context:
         full_context += "\n" + skills_context
 
-    for line in lines:
+    pp_lines = preprocess_lines(lines)
+    for line in pp_lines:
         if not line.strip() or line.strip().startswith("#"):
             continue
         opcodes = decoder.decode_line(line, imports_context=full_context)

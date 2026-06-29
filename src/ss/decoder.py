@@ -1,10 +1,36 @@
 import re
 import json
-from typing import List
+from typing import List, Tuple
 from openai import OpenAI
 from .opcodes import Opcode, OpcodeType, InputSpec, OutputSpec
 from .config import load_config
 from .prompts import DECODER_PROMPT
+
+def preprocess_lines(lines: List[str]) -> List[str]:
+    """Combine recommend << DELIM ... DELIM heredoc blocks into single logical lines."""
+    result = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        m = re.match(r'^(\$\w+\s*=\s*recommend\s+<<)\s*(\w+)', stripped)
+        if m:
+            prefix = m.group(1)
+            delim = m.group(2)
+            body_parts = []
+            i += 1
+            while i < len(lines):
+                if lines[i].strip() == delim:
+                    break
+                body_parts.append(lines[i])
+                i += 1
+            combined = prefix + "\n" + "".join(body_parts) + "\n" + delim
+            result.append(combined)
+        else:
+            result.append(line)
+        i += 1
+    return result
+
 
 def _parse_call_args(raw_args: List[str]) -> dict:
     """Parse raw arg strings into either positional list or named dict.
@@ -126,6 +152,19 @@ class Decoder:
         if assign_match:
             register = assign_match.group(1)
             rest = assign_match.group(2).strip()
+            if rest.startswith("recommend "):
+                raw_block = rest[10:]
+                # Heredoc: << DELIM\n...\nDELIM
+                heredoc_m = re.match(r'<<\s*(\w+)\n(.*)\n\s*\1\s*$', raw_block, re.DOTALL)
+                if heredoc_m:
+                    block = heredoc_m.group(2)
+                    return [Opcode(type=OpcodeType.RECOMMEND, params={"register": register, "block": block})]
+                # Inline quoted: "..." or '...'
+                if (raw_block.startswith('"') and raw_block.endswith('"')) or \
+                   (raw_block.startswith("'") and raw_block.endswith("'")):
+                    block = raw_block[1:-1]
+                    return [Opcode(type=OpcodeType.RECOMMEND, params={"register": register, "block": block})]
+                return [Opcode(type=OpcodeType.RECOMMEND, params={"register": register, "block": raw_block})]
             if rest.startswith("infer "):
                 prompt_raw = rest[6:].strip()
                 q = prompt_raw[0] if prompt_raw else ""
