@@ -535,22 +535,7 @@ class VM:
         # --- Collect items from source registers ---
         all_items = []
         for src in sources:
-            src = src.strip()
-            if src.startswith('$'):
-                val = self.registers.get(src)
-                if isinstance(val, list):
-                    all_items.extend(val)
-                elif isinstance(val, str):
-                    try:
-                        parsed = json.loads(val)
-                        if isinstance(parsed, list):
-                            all_items.extend(parsed)
-                        else:
-                            all_items.append(val)
-                    except (json.JSONDecodeError, TypeError):
-                        all_items.append(val)
-                elif val is not None:
-                    all_items.append(val)
+            all_items.extend(_resolve_source(src))
 
         if not all_items:
             return []
@@ -586,13 +571,18 @@ class VM:
         need_llm = bool(match_list or reject_list or rank_str)
 
         if need_llm:
+            # Resolve register references before building the prompt
+            resolved_matches = [_rs(m) for m in match_list]
+            resolved_rejects = [_rs(r) for r in reject_list]
+            resolved_rank = _rs(rank_str) if rank_str else None
+
             prompt_parts = []
-            if match_list:
-                prompt_parts.append("Include items that satisfy ALL of these criteria:\n" + "\n".join(f"- {m}" for m in match_list))
-            if reject_list:
-                prompt_parts.append("Exclude items that satisfy ANY of these criteria:\n" + "\n".join(f"- {r}" for r in reject_list))
-            if rank_str:
-                prompt_parts.append(f"Rank items by: {rank_str}")
+            if resolved_matches:
+                prompt_parts.append("Include items that satisfy ALL of these criteria:\n" + "\n".join(f"- {m}" for m in resolved_matches))
+            if resolved_rejects:
+                prompt_parts.append("Exclude items that satisfy ANY of these criteria:\n" + "\n".join(f"- {r}" for r in resolved_rejects))
+            if resolved_rank:
+                prompt_parts.append(f"Rank items by: {resolved_rank}")
 
             criteria_text = "\n\n".join(prompt_parts)
 
