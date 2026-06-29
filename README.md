@@ -12,9 +12,11 @@ Strusky makes building agents easy:
 
 Control-flow is done through a classical VM using instruction pointers, opcodes, and a set of primitives with a notable exception. Instead of a virtual ALU, the LLM is the ALU and uses structured output to control the program. This allows for primitives not to be classic boolean logic but instead to be language and structure based. MCPs (imported via `import X from uvx://...`) and skills (imported via `import file.md` or `load skill path as alias`) are all first-class objects with register access and `%` callable syntax. The transformer is the foundational unit of computation for the fuzzy tasks.
 
-Recommender systems are specificed using declarative programming paradigms, punting the actual SOTA mechanics to be both out of scope and flexible. It uses structured input and output. 
+Recommender systems are specificed using declarative programming paradigms, punting the actual SOTA mechanics to be both out of scope and flexible. It uses structured input and output. [docs](/docs/recommender.md)
 
-The agency is the emergent property of these. This programming languages is designed to look like existing languages because it is intended to be written with a coding harness. 
+The Agency part of the agent is the emergent property of these. 
+
+The programming language is designed to look like existing languages because it is intended to be written with a coding harness. 
 
 This isn't experimental. It works. 
 
@@ -261,38 +263,13 @@ Set options in `.env` or the environment (comma-separated):
 STRUSKY_OPTS=git
 ```
 
-## Project Structure
-
-```
-src/ss/
-├── agent_create.py   Free-form agent generator (SYNTAX_GUIDE)
-├── agent_runner.py   Run agent with prepended $prompt
-├── cli.py            Direct script runner
-├── decoder.py        Regex + LLM decoder
-├── vm.py             VM with debug support
-├── opcodes.py        Opcode types and models
-├── prompts.py        Decoder prompt templates
-├── config.py         TOML config loader
-├── mcp.py            MCP server manager
-├── dap_server.py     DAP protocol TCP server
-├── dap_adapter.py    DAP stdio adapter (VS Code)
-├── skill_loader.py   Load .ss skill files
-frontend/
-├── server.py         HTTP API (port 5555)
-├── index.html        Single-page web UI
-├── strusky.js        Client-side spec parsing library
-agents/               Default directory for created agents
-guide.md              Language reference (injected into LLM prompts)
-.env.example          Optional configuration template
-start-frontend        Entry point script
-```
-
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) - VM architecture, opcode reference, built-in tools, pipeline diagram
 - [docs/server.md](docs/server.md) - API server reference (endpoints, request/response formats, CLI flags)
 - [docs/strusky.js.md](docs/strusky.js.md) - Client-side JS library (`parseInputSpecs`, `parseOutputSpecs`, `serve`)
 - [docs/guide.md](docs/guide.md) - Syntax Guide. This also gets injected into the LLM.
+- [docs/recommender](/docs/recommender.md) - The recommender overview.
 
 ## License
 
