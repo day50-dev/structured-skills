@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ss · run agent</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-glow: rgba(88,166,255,0.12);
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --radius: 8px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Liberation Mono', monospace;
+  }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ── Sidebar ─────────────────────────────────────────── */
+  #sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #sidebar .brand {
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  #sidebar .brand .logo {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: var(--bg);
+    font-size: 13px;
+  }
+  #sidebar .brand h2 { font-size: 15px; font-weight: 600; }
+  #sidebar .brand span { font-size: 11px; color: var(--text-muted); }
+
+  #agent-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  #agent-list .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    padding: 12px 10px 6px;
+  }
+  .agent-item {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    background: none;
+    color: var(--text);
+    text-align: left;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: var(--font);
+    transition: background 0.15s;
+    border-left: 3px solid transparent;
+  }
+  .agent-item:hover { background: var(--accent-glow); }
+  .agent-item.active {
+    background: var(--accent-glow);
+    border-left-color: var(--accent);
+    color: var(--accent);
+  }
+  .agent-item .path {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    font-family: var(--mono);
+  }
+
+  /* ── Main ────────────────────────────────────────────── */
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #toolbar {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+  #toolbar h3 {
+    font-size: 14px;
+    font-weight: 600;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #toolbar .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--surface-2);
+    color: var(--text-muted);
+    font-family: var(--mono);
+    border: 1px solid var(--border);
+  }
+
+  #content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .pane-container {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .pane + .pane {
+    border-left: 1px solid var(--border);
+  }
+
+  .pane-header {
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .pane-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  /* ── Code display ────────────────────────────────────── */
+  #code-display {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.7;
+    padding: 16px;
+    white-space: pre;
+    overflow-x: auto;
+    color: var(--text);
+  }
+  #code-display .input-line {
+    color: var(--orange);
+  }
+  #code-display .comment {
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  /* ── Input form ──────────────────────────────────────── */
+  #input-form {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .field-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .field-group label .type-tag {
+    font-weight: 400;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--accent);
+  }
+  .field-group input,
+  .field-group textarea {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--text);
+    font-family: var(--font);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field-group input:focus,
+  .field-group textarea:focus {
+    border-color: var(--accent);
+  }
+  .field-group textarea {
+    resize: vertical;
+    min-height: 60px;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .field-group input[type="file"] {
+    padding: 6px;
+  }
+  .field-group input[type="file"]::file-selector-button {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 12px;
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+    margin-right: 8px;
+  }
+  .field-group input[type="file"]::file-selector-button:hover {
+    background: var(--surface-2);
+  }
+
+  #run-btn {
+    padding: 10px 20px;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  #run-btn:hover { opacity: 0.9; }
+  #run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #run-btn .spinner {
+    display: none;
+    width: 16px; height: 16px;
+    border: 2px solid var(--bg);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  #run-btn.loading .spinner { display: inline-block; }
+  #run-btn.loading .btn-text { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Output ──────────────────────────────────────────── */
+  #output {
+    padding: 16px;
+    font-size: 13px;
+  }
+  #output .empty-state {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 40px 20px;
+    font-size: 13px;
+  }
+  #output .empty-state .icon { font-size: 32px; margin-bottom: 8px; opacity: 0.3; }
+  .registers-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .registers-table th {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 2px solid var(--border);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+  }
+  .registers-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12px;
+    word-break: break-all;
+    vertical-align: top;
+  }
+  .registers-table td:first-child { color: var(--accent); font-weight: 600; white-space: nowrap; }
+  .registers-table tr:last-child td { border-bottom: none; }
+  .registers-table .reg-val { max-height: 120px; overflow-y: auto; display: block; white-space: pre-wrap; }
+
+  .progress-box {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    color: var(--text-muted);
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 12px;
+  }
+
+  .tokens-bar {
+    display: flex;
+    gap: 16px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 11px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .tokens-bar strong { color: var(--text); }
+
+  .error { color: var(--red); }
+
+  /* ── Empty / welcome state ───────────────────────────── */
+  .welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 40px;
+  }
+  .welcome .icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: 0.3;
+  }
+  .welcome h3 {
+    color: var(--text);
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+  .welcome p { font-size: 13px; max-width: 360px; }
+
+  /* ── Error state in sidebar ──────────────────────────── */
+  .sidebar-error {
+    padding: 16px;
+    color: var(--red);
+    font-size: 12px;
+    text-align: center;
+  }
+  .sidebar-loading {
+    padding: 16px;
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  /* ── Responsive ──────────────────────────────────────── */
+  @media (max-width: 860px) {
+    .pane-container { flex-direction: column; }
+    .pane + .pane { border-left: none; border-top: 1px solid var(--border); }
+    #sidebar { width: 200px; }
+  }
+  @media (max-width: 600px) {
+    body { flex-direction: column; }
+    #sidebar { width: 100%; max-height: 200px; border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Sidebar ──────────────────────────────────────────── -->
+<aside id="sidebar">
+  <div class="brand">
+    <div class="logo">Ss</div>
+    <div>
+      <h2>Structured Skills</h2>
+      <span>agent runner</span>
+    </div>
+  </div>
+  <div id="agent-list">
+    <div class="section-label">Agents</div>
+    <div class="sidebar-loading" id="loading-agents">Loading agents…</div>
+  </div>
+</aside>
+
+<!-- ── Main ─────────────────────────────────────────────── -->
+<div id="main">
+  <div id="toolbar">
+    <h3 id="agent-name">Select an agent</h3>
+    <span class="badge" id="agent-path"></span>
+  </div>
+
+  <div id="content">
+    <div class="welcome" id="welcome">
+      <div class="icon">&#9670;</div>
+      <h3>Select an agent</h3>
+      <p>Pick a <code>.ss</code> agent from the sidebar, fill in the inputs, and run it.</p>
+    </div>
+
+    <div class="pane-container" id="panes" style="display:none">
+      <!-- Code pane -->
+      <div class="pane">
+        <div class="pane-header">Script</div>
+        <div class="pane-body"><pre id="code-display"></pre></div>
+      </div>
+      <!-- Input & Output pane -->
+      <div class="pane">
+        <div class="pane-header">Inputs</div>
+        <div class="pane-body">
+          <form id="input-form" onsubmit="return runAgent(event)"></form>
+        </div>
+        <div class="pane-header" style="border-top:1px solid var(--border);">Output</div>
+        <div class="pane-body" id="output-pane">
+          <div id="output">
+            <div class="empty-state">
+              <div class="icon">&#9654;</div>
+              Fill in the inputs and press <strong>Run</strong>
+            </div>
+          </div>
+        </div>
+        <div class="tokens-bar" id="tokens-bar" style="display:none">
+          <span>Tokens: <strong id="tok-total">0</strong></span>
+          <span>Prompt: <strong id="tok-prompt">0</strong></span>
+          <span>Completion: <strong id="tok-completion">0</strong></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── strusky.js (inlined) ────────────────────────────────
+const strusky = (() => {
+  const INPUT_RE = /input\s+\$(\w+)\s+as\s+(\w+)/;
+  const OUTPUT_RE = /output\s+\$(\w+)\s+as\s+(\w+):?\s*(.*)/;
+
+  function parseInputSpecs(content) {
+    const specs = [];
+    const lines = content.split('\n');
+    for (const line of lines) {
+      const m = line.trim().match(INPUT_RE);
+      if (m) specs.push({ name: m[1], type: m[2] });
+    }
+    return specs;
+  }
+
+  function parseOutputSpecs(content) {
+    const specs = [];
+    const lines = content.split('\n');
+    for (const line of lines) {
+      const m = line.trim().match(OUTPUT_RE);
+      if (m) specs.push({ name: m[1], type: m[2], register: m[3] || '' });
+    }
+    return specs;
+  }
+
+  function serve(code, input, opts = {}) {
+    const endpoint = opts.endpoint || '/api/serve';
+    return fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, input }),
+    }).then(r => r.json());
+  }
+
+  return { parseInputSpecs, parseOutputSpecs, serve };
+})();
+
+// ── State ────────────────────────────────────────────────
+let agents = [];
+let currentAgent = null;
+let currentSpecs = [];
+
+// ── Init ─────────────────────────────────────────────────
+async function init() {
+  await loadAgentList();
+}
+
+// ── Load agent list ──────────────────────────────────────
+async function loadAgentList() {
+  const listEl = document.getElementById('agent-list');
+  try {
+    const res = await fetch('/api/agents');
+    const data = await res.json();
+    agents = data.agents || [];
+    renderAgentList(agents);
+  } catch (err) {
+    document.getElementById('loading-agents').textContent = 'Failed to load agents';
+    const errEl = document.createElement('div');
+    errEl.className = 'sidebar-error';
+    errEl.textContent = err.message;
+    listEl.appendChild(errEl);
+  }
+}
+
+function renderAgentList(agents) {
+  const container = document.getElementById('agent-list');
+  container.innerHTML = '<div class="section-label">Agents</div>';
+
+  if (!agents.length) {
+    const empty = document.createElement('div');
+    empty.className = 'sidebar-loading';
+    empty.textContent = 'No agents found';
+    container.appendChild(empty);
+    return;
+  }
+
+  // Group by directory
+  const groups = {};
+  for (const a of agents) {
+    const parts = a.path.split('/');
+    const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : '/';
+    if (!groups[dir]) groups[dir] = [];
+    groups[dir].push(a);
+  }
+
+  for (const [dir, items] of Object.entries(groups)) {
+    const label = document.createElement('div');
+    label.className = 'section-label';
+    label.textContent = dir;
+    container.appendChild(label);
+
+    for (const agent of items) {
+      const btn = document.createElement('button');
+      btn.className = 'agent-item';
+      btn.dataset.path = agent.path;
+      btn.innerHTML = `${agent.name} <div class="path">${agent.path}</div>`;
+      btn.onclick = () => selectAgent(agent.path);
+      container.appendChild(btn);
+    }
+  }
+}
+
+// ── Select agent ─────────────────────────────────────────
+async function selectAgent(path) {
+  // Highlight selected
+  document.querySelectorAll('.agent-item').forEach(el => el.classList.remove('active'));
+  document.querySelector(`.agent-item[data-path="${path}"]`)?.classList.add('active');
+
+  document.getElementById('welcome').style.display = 'none';
+  document.getElementById('panes').style.display = 'flex';
+
+  try {
+    const res = await fetch(`/api/agents/${encodeURIComponent(path)}`);
+    if (!res.ok) throw new Error('Not found');
+    const data = await res.json();
+
+    currentAgent = data;
+    currentSpecs = data.input_specs || [];
+
+    document.getElementById('agent-name').textContent = data.name;
+    document.getElementById('agent-path').textContent = data.path;
+
+    renderCode(data.content);
+    renderForm(currentSpecs);
+    clearOutput();
+  } catch (err) {
+    document.getElementById('agent-name').textContent = 'Error loading agent';
+    document.getElementById('code-display').textContent = `// Error: ${err.message}`;
+    document.getElementById('input-form').innerHTML = '';
+  }
+}
+
+// ── Render code ──────────────────────────────────────────
+function renderCode(content) {
+  const el = document.getElementById('code-display');
+  const lines = content.split('\n');
+  let html = '';
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('input ')) {
+      html += `<span class="input-line">${escapeHtml(line)}</span>\n`;
+    } else if (trimmed.startsWith('#')) {
+      html += `<span class="comment">${escapeHtml(line)}</span>\n`;
+    } else {
+      html += escapeHtml(line) + '\n';
+    }
+  }
+  el.innerHTML = html;
+}
+
+// ── Render input form ────────────────────────────────────
+function renderForm(specs) {
+  const form = document.getElementById('input-form');
+  form.innerHTML = '';
+
+  if (!specs || !specs.length) {
+    form.innerHTML = `
+      <div style="color:var(--text-muted);text-align:center;padding:20px;font-size:13px;">
+        This agent has no input specs. Click <strong>Run</strong> to execute.
+      </div>
+      <button type="submit" id="run-btn" class="run-btn">Run Agent</button>
+    `;
+    return;
+  }
+
+  for (const spec of specs) {
+    const group = document.createElement('div');
+    group.className = 'field-group';
+
+    const label = document.createElement('label');
+    label.htmlFor = `input-${spec.name}`;
+    label.innerHTML = `\$${spec.name} <span class="type-tag">${spec.type}</span>`;
+
+    let input;
+    if (spec.type === 'number') {
+      input = document.createElement('input');
+      input.type = 'number';
+      input.step = 'any';
+    } else if (spec.type === 'file') {
+      input = document.createElement('input');
+      input.type = 'file';
+    } else {
+      input = document.createElement(spec.type === 'repo' ? 'input' : 'input');
+      input.type = 'text';
+      if (spec.type === 'repo') input.placeholder = 'https://github.com/user/repo';
+    }
+    input.id = `input-${spec.name}`;
+    input.name = spec.name;
+    input.dataset.type = spec.type;
+
+    group.appendChild(label);
+    group.appendChild(input);
+    form.appendChild(group);
+  }
+
+  const btn = document.createElement('button');
+  btn.type = 'submit';
+  btn.id = 'run-btn';
+  btn.innerHTML = '<span class="btn-text">Run Agent</span><span class="spinner"></span>';
+  form.appendChild(btn);
+}
+
+// ── Run agent ────────────────────────────────────────────
+async function runAgent(event) {
+  event.preventDefault();
+
+  const btn = document.getElementById('run-btn');
+  btn.classList.add('loading');
+  btn.disabled = true;
+
+  clearOutput();
+  showProgress('Starting execution…');
+
+  // Build input object
+  const inputs = {};
+  for (const spec of currentSpecs) {
+    const el = document.getElementById(`input-${spec.name}`);
+    if (!el) continue;
+
+    if (spec.type === 'file' && el.files && el.files[0]) {
+      inputs[spec.name] = await readFileAsText(el.files[0]);
+    } else if (spec.type === 'number') {
+      inputs[spec.name] = el.value;
+    } else {
+      inputs[spec.name] = el.value;
+    }
+  }
+
+  // Prepend input assignments to the code
+  let code = currentAgent.content;
+
+  try {
+    const res = await fetch('/api/serve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, input: inputs }),
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      showError(data.error);
+    } else {
+      showOutput(data.registers, data.tokens, data.progress);
+    }
+  } catch (err) {
+    showError(err.message);
+  }
+
+  btn.classList.remove('loading');
+  btn.disabled = false;
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
+}
+
+// ── Output rendering ─────────────────────────────────────
+function clearOutput() {
+  document.getElementById('output').innerHTML = '';
+  document.getElementById('tokens-bar').style.display = 'none';
+}
+
+function showProgress(msg) {
+  document.getElementById('output').innerHTML = `<div class="progress-box">${escapeHtml(msg)}</div>`;
+}
+
+function showError(msg) {
+  document.getElementById('output').innerHTML = `<div class="error">Error: ${escapeHtml(msg)}</div>`;
+}
+
+function showOutput(registers, tokens, progress) {
+  const outputEl = document.getElementById('output');
+  let html = '';
+
+  if (registers && Object.keys(registers).length) {
+    html += '<table class="registers-table">';
+    html += '<tr><th>Register</th><th>Value</th></tr>';
+    for (const [key, val] of Object.entries(registers)) {
+      const display = typeof val === 'string' && val.length > 500 ? val.slice(0, 497) + '…' : String(val);
+      html += `<tr><td>${escapeHtml(key)}</td><td><span class="reg-val">${escapeHtml(display)}</span></td></tr>`;
+    }
+    html += '</table>';
+  }
+  if (progress) {
+    html += `<div class="progress-box">${escapeHtml(progress)}</div>`;
+  }
+  outputEl.innerHTML = html || '<div style="color:var(--text-muted);">(no output)</div>';
+
+  // Token bar
+  if (tokens) {
+    document.getElementById('tokens-bar').style.display = 'flex';
+    document.getElementById('tok-total').textContent = tokens.total || 0;
+    document.getElementById('tok-prompt').textContent = tokens.prompt || 0;
+    document.getElementById('tok-completion').textContent = tokens.completion || 0;
+  } else {
+    document.getElementById('tokens-bar').style.display = 'none';
+  }
+}
+
+// ── Utils ────────────────────────────────────────────────
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// ── Start ────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

@@ -2,11 +2,12 @@
 """Structured Skills Demo Server — chat UI backend with 4-step agent workflow."""
 
 import http.server
+import io
 import json
 import os
 import re
 import sys
-import tempfile
+import contextlib
 import time
 import urllib.parse
 from pathlib import Path
@@ -14,12 +15,79 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from ss.config import load_config, SETUP_GUIDANCE
-from ss.decoder import Decoder
+from ss.decoder import Decoder, parse_input_specs, parse_output_specs
 from ss.vm import VM
 from openai import OpenAI
 
 HERE = Path(__file__).resolve().parent
+PROJECT = HERE.parent
 PORT = int(os.environ.get("PORT", 8080))
+
+# ── Agent discovery & execution (for /run demo) ───────────
+def discover_agents():
+    agents = []
+    seen = set()
+    dirs = [PROJECT / "ss-src", PROJECT / "examples", PROJECT / "frontend" / "agents", PROJECT]
+    for d in dirs:
+        if not d.is_dir():
+            continue
+        for f in sorted(d.iterdir()):
+            if f.suffix == ".ss" and f.stem not in seen:
+                seen.add(f.stem)
+                try:
+                    rel = f.relative_to(PROJECT)
+                except ValueError:
+                    rel = f
+                agents.append({"name": f.stem, "path": str(rel), "size": f.stat().st_size})
+    return agents
+
+def read_agent(path_str):
+    p = PROJECT / path_str
+    if not p.exists() or p.suffix != ".ss":
+        return None
+    return p.read_text()
+
+def run_code(code_text, inputs=None):
+    lines = code_text.splitlines()
+    config_path = str(PROJECT / "config.toml")
+    specs = parse_input_specs(lines)
+    assign_lines = []
+    if specs and inputs:
+        for spec in specs:
+            val = inputs.get(spec.name, "")
+            if spec.type == "file" and val:
+                val = val
+            assign_lines.append(f'${spec.name} = "{_escape(val)}"')
+    elif inputs and "$prompt" in inputs:
+        assign_lines.append(f'$prompt = "{_escape(inputs["$prompt"])}"')
+    elif not specs:
+        assign_lines.append('$prompt = ""')
+    all_lines = assign_lines + lines
+    decoder = Decoder(config_path=config_path)
+    program = []
+    imports = []
+    for line in all_lines:
+        s = line.strip()
+        if s.startswith("import "):
+            imports.append(s)
+    ctx = "\n".join(imports)
+    for line in all_lines:
+        s = line.strip()
+        if not s or s.startswith("#") or s.startswith("input "):
+            continue
+        program.extend(decoder.decode_line(s, imports_context=ctx))
+    vm = VM(config_path=config_path)
+    vm.load_program(program)
+    buf = io.StringIO()
+    with contextlib.redirect_stderr(buf):
+        vm.run()
+    progress = buf.getvalue()
+    registers = {reg: str(val) for reg, val in vm.registers.items()}
+    return registers, vm.token_usage, progress
+
+def _escape(s):
+    return s.replace("\\", "\\\\").replace("\"", "\\\"")
+
 
 STRATEGY_PROMPT = """You are the Structured Skills Strategy Advisor. Your job is to analyze a complex user request and explain how Structured Skills can help accomplish it.
 
@@ -90,6 +158,27 @@ class DemoHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/agents":
+            agents = discover_agents()
+            self._send_json(200, {"agents": agents})
+            return
+        if parsed.path.startswith("/api/agents/"):
+            path = parsed.path[len("/api/agents/"):]
+            content = read_agent(path)
+            if content is None:
+                self._send_json(404, {"error": "Agent not found"})
+                return
+            lines = content.splitlines()
+            in_specs = [{"name": s.name, "type": s.type} for s in parse_input_specs(lines)]
+            out_specs = [{"name": s.name, "type": s.type, "register": s.register} for s in parse_output_specs(lines)]
+            self._send_json(200, {
+                "name": Path(path).stem,
+                "path": path,
+                "content": content,
+                "input_specs": in_specs,
+                "output_specs": out_specs,
+            })
+            return
         if parsed.path.startswith("/api/"):
             self._send_json(404, {"error": "Not found"})
             return
@@ -101,6 +190,8 @@ class DemoHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/chat":
             self._handle_chat()
+        elif parsed.path == "/api/serve":
+            self._handle_serve()
         else:
             self._send_json(404, {"error": "Not found"})
 
@@ -281,6 +372,29 @@ class DemoHandler(http.server.SimpleHTTPRequestHandler):
         })
 
         self._send_json(200, result)
+
+    def _handle_serve(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length).decode() if length else "{}"
+            data = json.loads(body)
+        except Exception:
+            self._send_json(400, {"error": "Invalid request"})
+            return
+        code = data.get("code", "")
+        inputs = data.get("input", {})
+        if not code:
+            self._send_json(400, {"error": "code is required"})
+            return
+        ok, cfg_or_err = self._check_config()
+        if not ok:
+            self._send_json(500, {"error": cfg_or_err})
+            return
+        try:
+            registers, token_usage, progress = run_code(code, inputs)
+            self._send_json(200, {"registers": registers or {}, "tokens": token_usage, "progress": progress})
+        except Exception as e:
+            self._send_json(500, {"error": str(e)})
 
     def log_message(self, format, *args):
         pass

@@ -141,6 +141,8 @@ Any DAP-compatible client can connect to the TCP server on port 4711.
 | `./ss-debug` | Standalone DAP TCP server |
 | `./ss-debug-adapter` | Stdio DAP adapter (for VS Code) |
 | `./ss <file.ss>` | Run a script directly |
+| `ss server` | API server on port 8081 with Swagger UI |
+| `strusky-server` | Same as `ss server` (via pyproject.toml entry point) |
 | `python frontend/server.py` | Web UI on port 5555 |
 
 All output (Fetching, Thinking, results, tokens) goes to stderr/stdout with full visibility — no truncation, no hidden diagnostics.
@@ -157,6 +159,44 @@ All output (Fetching, Thinking, results, tokens) goes to stderr/stdout with full
 - **VM** (`src/ss/vm.py`): Register-based with call stack, loop stack, jump targets, MCP integration, token tracking, and DAP debug support.
 - **MCP** (`src/ss/mcp.py`): Manages MCP server processes (launch via uvx/npx/json, call tools, shutdown).
 - **Agent Create** (`src/ss/agent_create.py`): Template-based agent generator — LLM fills `INSTRUCTION_N` placeholders in a fixed `.ss` skeleton.
+
+## API Server
+
+A standalone HTTP server exposes the strusky VM as a REST API with Swagger UI:
+
+```bash
+ss server
+# → http://0.0.0.0:8081  (default port)
+```
+
+Or via the pyproject.toml entry point:
+
+```bash
+strusky-server
+```
+
+Override the default port with `--port`:
+
+```bash
+ss server --port 9000
+```
+
+**Endpoints:**
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /` | Server info |
+| `GET /openapi.json` | OpenAPI 3.1 spec |
+| `GET /docs` | Swagger UI for interactive API exploration |
+| `POST /run` | Execute strusky code with optional inputs |
+
+**Example `POST /run`:**
+
+```json
+{ "code": "input $NAME as string\n$result = \"hello, $NAME\"\n$prompt = $result", "input": { "NAME": "world" } }
+```
+
+Returns `{ "registers": {...}, "tokens": [...], "progress": "..." }`.
 
 ## Frontend
 
