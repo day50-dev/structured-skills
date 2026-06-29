@@ -92,13 +92,14 @@ a data transformer.
 
 ## Opcodes
 
-14 opcode types defined in `src/ss/opcodes.py:6-20`.
+15 opcode types defined in `src/ss/opcodes.py:6-21`.
 
 | Opcode       | Code     | Description |
 |--------------|----------|-------------|
 | `ASSIGN`     | `$x = y` | Store a literal or evaluated expression into a register |
 | `CALL`       | `%tool` / `%server.name` | Call a built-in tool, MCP tool, skill, or loaded skill; optionally store result |
 | `INFER`      | `infer "prompt $reg"` | Send prompt to the LLM, store response in a register |
+| `RECOMMEND`  | `$x = recommend << END ... END` | Declarative retrieval — parse XML-like block, apply structural filters, LLM ranking/selection |
 | `LOOP`       | `for each $item in $list:` | Iterate over a list register |
 | `END`        | `end` | End of a `def`/`if`/`else`/`for` block |
 | `IF`         | `if condition:` | Conditional branch — jump to `ELSE`/`END` if falsy |
@@ -116,6 +117,7 @@ a data transformer.
 - **ASSIGN**: Evaluate RHS (resolve `$reg` refs, string interpolation, JSON) → store in register
 - **CALL**: Dispatch by name — skill (push call frame), MCP tool (JSON-RPC), loaded skill (subprocess), or built-in
 - **INFER**: Interpolate prompt → call LLM → store result in register. Falls back to deterministic mock for "location" prompts
+- **RECOMMEND**: Parse XML-like block (`<from>`, `<match>`, `<reject>`, structural filters, `<rank>`, `<limit>`) → collect items from source registers → apply structural filters programmatically → use LLM for semantic matching and ranking → apply limit → store result in register
 - **IF**: Evaluate condition → jump to `ELSE`/`END` if falsy
 - **ELSE**: Unconditional jump to matching `END` (skips else-block when if-block already ran)
 - **LOOP**: Maintain loop state on `loop_stack` — iterate list, set item register, jump back after body

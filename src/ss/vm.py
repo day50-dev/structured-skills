@@ -443,10 +443,11 @@ class VM:
 
         if has_rules and select_m:
             select_str = select_m.group(1)
-            _r = lambda n, d="": (m.group(1) if (m := re.search(rf'{n}="([^"]*)"', select_str)) else d)
-            select_rule = _r('rule')
-            rank_str = _r('rank')
-            limit = int((m.group(1) if (m := re.search(r'limit="?(\d+)"?', select_str)) else '0'))
+            read_attr = lambda n, d="": (m.group(1) if (m := re.search(rf'{n}="([^"]*)"', select_str)) else d)
+            select_rule = read_attr('rule')
+            rank_str = read_attr('rank')
+            limit_match = re.search(r'limit="?(\d+)"?', select_str)
+            limit = int(limit_match.group(1)) if limit_match else None
 
             rules = {}
             for rm in re.finditer(r'<rule\s+id="(\w+)"(.*?)</rule>', block, re.DOTALL):
@@ -462,33 +463,34 @@ class VM:
                     'matches': [x.strip() for x in re.findall(r'<matches>(.*?)</matches>', b) if x.strip()],
                 }
 
-            match_list: list = []
-            reject_list: list = []
-            min_len_val = None
-            max_len_val = None
-            contains_list: list = []
-            matches_list: list = []
+            def _collect(rid: str) -> dict:
+                visited = set()
+                acc = {'match': [], 'reject': [], 'min_len': None, 'max_len': None, 'contains': [], 'matches': []}
+                def _walk(cur):
+                    if cur in visited or cur not in rules:
+                        return
+                    visited.add(cur)
+                    r = rules[cur]
+                    for p in r['extends']:
+                        _walk(p.strip())
+                    acc['match'].extend(r['match'])
+                    acc['reject'].extend(r['reject'])
+                    if r['min_len'] is not None:
+                        acc['min_len'] = r['min_len']
+                    if r['max_len'] is not None:
+                        acc['max_len'] = r['max_len']
+                    acc['contains'].extend(r['contains'])
+                    acc['matches'].extend(r['matches'])
+                _walk(rid)
+                return acc
 
-            def resolve(rid: str, visited: set) -> None:
-                if rid in visited or rid not in rules:
-                    return
-                visited.add(rid)
-                r = rules[rid]
-                for parent in r['extends']:
-                    resolve(parent.strip(), visited)
-                match_list.extend(r['match'])
-                reject_list.extend(r['reject'])
-                if r['min_len'] is not None:
-                    nonlocal min_len_val
-                    min_len_val = r['min_len']
-                if r['max_len'] is not None:
-                    nonlocal max_len_val
-                    max_len_val = r['max_len']
-                contains_list.extend(r['contains'])
-                matches_list.extend(r['matches'])
-
-            if select_rule:
-                resolve(select_rule, set())
+            preds = _collect(select_rule)
+            match_list = preds['match']
+            reject_list = preds['reject']
+            min_len_val = preds['min_len']
+            max_len_val = preds['max_len']
+            contains_list = preds['contains']
+            matches_list = preds['matches']
         else:
             # --- Flat form ---
             match_list = [x.strip() for x in re.findall(r'<match>(.*?)</match>', block) if x.strip()]
@@ -499,17 +501,15 @@ class VM:
             matches_list = [x.strip() for x in re.findall(r'<matches>(.*?)</matches>', block) if x.strip()]
 
             limit = int(m.group(1)) if (m := re.search(r'<limit>\s*(\d+)\s*</limit>', block)) else None
-            rank_str = None
             rm = re.search(r'<rank\s+by="(\w+)"\s+context="([^"]*)"\s*/>', block)
             if rm:
                 rank_str = f"{rm.group(1)} {rm.group(2)}"
             else:
                 rm2 = re.search(r'<rank>(.*?)</rank>', block, re.DOTALL)
-                if rm2:
-                    rank_str = rm2.group(1).strip()
+                rank_str = rm2.group(1).strip() if rm2 else None
 
         # --- Collect items from source registers ---
-        all_items: list = []
+        all_items = []
         for src in sources:
             src = src.strip()
             if src.startswith('$'):
@@ -532,7 +532,7 @@ class VM:
             return []
 
         # --- Apply structural filters ---
-        filtered: list = []
+        filtered = []
         for item in all_items:
             s = str(item)
             if min_len_val is not None and len(s) < min_len_val:

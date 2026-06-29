@@ -24,7 +24,7 @@ def preprocess_lines(lines: List[str]) -> List[str]:
                     break
                 body_parts.append(lines[i])
                 i += 1
-            combined = prefix + "\n" + "".join(body_parts) + "\n" + delim
+            combined = prefix + " " + delim + "\n" + "".join(body_parts) + "\n" + delim
             result.append(combined)
         else:
             result.append(line)
@@ -147,24 +147,26 @@ class Decoder:
                     ]
             return [Opcode(type=OpcodeType.LOOP, params={"item": item, "register": source})]
 
+        # RECOMMEND (before ASSIGN — value may span lines with \n)
+        recommend_m = re.match(r"(\$\w+)\s*=\s*recommend\s+(.*)", line, re.DOTALL)
+        if recommend_m:
+            register = recommend_m.group(1)
+            raw_block = recommend_m.group(2).strip()
+            heredoc_m = re.match(r'<<\s*(\w+)\n(.*)\n\s*\1\s*$', raw_block, re.DOTALL)
+            if heredoc_m:
+                block = heredoc_m.group(2)
+                return [Opcode(type=OpcodeType.RECOMMEND, params={"register": register, "block": block})]
+            if (raw_block.startswith('"') and raw_block.endswith('"')) or \
+               (raw_block.startswith("'") and raw_block.endswith("'")):
+                block = raw_block[1:-1]
+                return [Opcode(type=OpcodeType.RECOMMEND, params={"register": register, "block": block})]
+            return [Opcode(type=OpcodeType.RECOMMEND, params={"register": register, "block": raw_block})]
+
         # ASSIGN
         assign_match = re.match(r"(\$\w+)\s*=\s*(.*)", line)
         if assign_match:
             register = assign_match.group(1)
             rest = assign_match.group(2).strip()
-            if rest.startswith("recommend "):
-                raw_block = rest[10:]
-                # Heredoc: << DELIM\n...\nDELIM
-                heredoc_m = re.match(r'<<\s*(\w+)\n(.*)\n\s*\1\s*$', raw_block, re.DOTALL)
-                if heredoc_m:
-                    block = heredoc_m.group(2)
-                    return [Opcode(type=OpcodeType.RECOMMEND, params={"register": register, "block": block})]
-                # Inline quoted: "..." or '...'
-                if (raw_block.startswith('"') and raw_block.endswith('"')) or \
-                   (raw_block.startswith("'") and raw_block.endswith("'")):
-                    block = raw_block[1:-1]
-                    return [Opcode(type=OpcodeType.RECOMMEND, params={"register": register, "block": block})]
-                return [Opcode(type=OpcodeType.RECOMMEND, params={"register": register, "block": raw_block})]
             if rest.startswith("infer "):
                 prompt_raw = rest[6:].strip()
                 q = prompt_raw[0] if prompt_raw else ""

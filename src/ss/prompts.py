@@ -5,6 +5,7 @@ OPCODE SCHEMA:
 - ASSIGN: {"type": "ASSIGN", "params": {"register": "$name", "value": "literal or $other"}}
 - CALL: {"type": "CALL", "params": {"name": "skill_or_tool", "args": ["arg1", "arg2"], "register": "$target_optional"}}
 - INFER: {"type": "INFER", "params": {"prompt": "instruction", "register": "$target_optional"}}
+- RECOMMEND: {"type": "RECOMMEND", "params": {"register": "$target", "block": "XML declarative block"}}
 - LOOP: {"type": "LOOP", "params": {"item": "$item_var", "register": "$list_var"}}
 - IF: {"type": "IF", "params": {"condition": "$var_or_literal"}}
 - ELSE: {"type": "ELSE", "params": {}}

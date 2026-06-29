@@ -163,7 +163,9 @@ def main():
             print(f"DAP server on {args.debug_host}:{args.debug_port}", file=sys.stderr, flush=True)
             t.join()
         else:
-            repl = DebugREPL(VM(config_path=args.config), pp_lines, program)
+            debug_vm = VM(config_path=args.config)
+            debug_vm.load_program(program)
+            repl = DebugREPL(debug_vm, pp_lines, program)
             repl.run()
         return
 
