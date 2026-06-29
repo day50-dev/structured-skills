@@ -8,7 +8,7 @@
 
 Let's break that down. Agents use recommendation systems based on context to take action on someone's behalf. 
 
-Here's how Strusky makes building agents easy:
+Strusky makes building agents easy:
 
 Control-flow is done through a classical VM using instruction pointers, opcodes, and a set of primitives with a notable exception. Instead of a virtual ALU, the LLM is the ALU and uses structured output to control the program. This allows for primitives not to be classic boolean logic but instead to be language and structure based. MCPs (imported via `import X from uvx://...`) and skills (imported via `import file.md` or `load skill path as alias`) are all first-class objects with register access and `%` callable syntax. The transformer is the foundational unit of computation for the fuzzy tasks.
 
