@@ -4,7 +4,21 @@
 <a href=https://pypi.org/project/strusky><img src=https://badge.fury.io/py/strusky.svg/></a>
 </p>
 
-**Structured Skills (ss)** is a stack-based virtual machine for orchestrating LLM-powered programs. It gives LLMs the equivalent of structured programming—loops, conditionals, variables, function calls—while keeping the model strictly out of control flow decisions. MCP (Model Context Protocol) servers provide external tools like web search and fetching.
+### What is an agent?
+
+The premise of this project lies on this definition: An agent is a context-rich recommender system with agency and control flow.
+
+Let's break it down. There's a recommendation system that uses context to take action on someone's behalf. Here's how strusky breaks that down and makes building agents easy:
+
+Control-flow is done through a classical vm using instruction pointers, opcodes, and a set of primitives with a notable exception. Instead of a virtual ALU, the LLM is the ALU and uses structured output to control the program. This allows for primitives not to be classic boolean logic but instead to be language and structure based. MCPs, skills, these are first class objects. The transformer is the foundational unit of computation for the fuzzy tasks.
+
+Recommender systems are specificed using declarative programming paradigms, punting the actual SOTA mechanics to be both out of scope and flexible. It uses structured input and output. 
+
+The agency is the emergent property of these. This programming languages is designed to look like existing languages because it is intended to be written with a coding harness. 
+
+This isn't experimental, it works. 
+
+As a more formal introduction, **Strusky** is a stack-based virtual machine for orchestrating LLM-powered programs. It gives LLMs the equivalent of structured programming—loops, conditionals, variables, function calls—while keeping the model strictly out of control flow decisions. MCP (Model Context Protocol) servers provide external tools like web search and fetching. This paradigm is called "structured skills".
 
 ## Quick Start
 

@@ -347,7 +347,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self._cors()
         self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
+        try:
+            self.wfile.write(json.dumps(data).encode())
+        except (BrokenPipeError, ConnectionError, OSError):
+            pass
 
     def _body(self):
         length = int(self.headers.get("Content-Length", 0))
@@ -468,20 +471,29 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         rc = getattr(delta, 'reasoning_content', None)
                         if rc:
                             event = json.dumps({"type": "reasoning", "token": rc})
-                            self.wfile.write(f"data: {event}\n\n".encode())
-                            self.wfile.flush()
+                            try:
+                                self.wfile.write(f"data: {event}\n\n".encode())
+                                self.wfile.flush()
+                            except (BrokenPipeError, ConnectionError, OSError):
+                                break
                         if delta.content:
                             full_text += delta.content
                             event = json.dumps({"type": "token", "token": delta.content})
-                            self.wfile.write(f"data: {event}\n\n".encode())
-                            self.wfile.flush()
+                            try:
+                                self.wfile.write(f"data: {event}\n\n".encode())
+                                self.wfile.flush()
+                            except (BrokenPipeError, ConnectionError, OSError):
+                                break
                 usage = getattr(response, "usage", None)
                 tokens = {"prompt": usage.prompt_tokens, "completion": usage.completion_tokens, "total": usage.total_tokens} if usage else None
                 script = _apply_edits(current_script, full_text)
                 new_script = "# modify: " + body.get("instruction", "").replace("\n", " ") + "\n\n" + script
                 event = json.dumps({"type": "done", "script": new_script, "tokens": tokens})
-                self.wfile.write(f"data: {event}\n\n".encode())
-                self.wfile.flush()
+                try:
+                    self.wfile.write(f"data: {event}\n\n".encode())
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionError, OSError):
+                    pass
             except Exception as e:
                 logger.error("Modify stream failed: %s", e)
                 event = json.dumps({"type": "error", "error": str(e)})
