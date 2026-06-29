@@ -62,7 +62,7 @@ flowchart LR
         R3["$answer"]
     end
     subgraph C["Computation (LLM)"]
-        LLM['infer "extract key facts<br/>from $results"']
+        LLM["infer: extract key facts from $results"]
     end
 
     Loop -.-> R1
