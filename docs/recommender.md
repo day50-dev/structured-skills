@@ -32,30 +32,15 @@ $result = recommend "<from>$chunks</from><match>relevant</match><limit>3</limit>
 
 ## Execution Pipeline
 
-```
-  Raw block ──► Register substitution ──► Parse XML tags
-                  │
-                  ▼
-        ┌──────────────────┐
-        │ Structural filers│  min/max length, contains, regex
-        │ (programmatic)   │  — no LLM call
-        └────────┬─────────┘
-                 ▼
-        ┌──────────────────┐
-        │ Semantic filers  │  match/reject evaluated by LLM
-        │ (LLM)            │  "is this item about $topic?"
-        └────────┬─────────┘
-                 ▼
-        ┌──────────────────┐
-        │ Ranking          │  LLM ranks selected items
-        │ (LLM)            │  by similarity, recency, etc.
-        └────────┬─────────┘
-                 ▼
-           ┌──────────┐
-           │ Limit     │  truncate to N
-           └──────────┘
-                 ▼
-           Return list
+```mermaid
+flowchart TD
+    Start["Raw block"] --> Subst["Register substitution"]
+    Subst --> Parse["Parse XML tags"]
+    Parse --> Struct["Structural filters<br/>min/max length, contains, regex<br/>(programmatic — no LLM call)"]
+    Struct --> Semantic["Semantic filters<br/>match/reject evaluated by LLM<br/>'is this item about $topic?'"]
+    Semantic --> Rank["Ranking<br/>LLM ranks selected items<br/>by similarity, recency, etc."]
+    Rank --> Limit["Limit<br/>truncate to N"]
+    Limit --> Result["Return list"]
 ```
 
 **Key principle**: structural filters are applied programmatically first (fast, deterministic), then only the survivors are sent to the LLM for semantic evaluation and ranking.

@@ -2,41 +2,24 @@
 
 ## Pipeline
 
-```
-  .ss source file
-        │
-        ▼
-  ┌─────────────┐
-  │   Decoder   │  regex for structures, LLM fallback for "vibe" lines
-  │ (decoder.py)│
-  └──────┬──────┘
-         │ list of Opcode objects
-         ▼
-  ┌─────────────┐
-  │   Program   │  flat IR — ordered list of Opcodes
-  │ (opcodes.py)│
-  └──────┬──────┘
-         │
-         ▼
-  ┌─────────────┐
-  │     VM      │  register-based executor
-  │   (vm.py)   │
-  │             │
-  │  ┌───────┐  │
-  │  │  ALU  │  │  LLM inference — the "computation" unit
-  │  │ (LLM) │  │
-  │  └───────┘  │
-  │             │
-  │  Built-in   │  9 local tools (%read, %write, %add, …)
-  │  Tools      │
-  │             │
-  │  ┌───────┐  │
-  │  │  MCP  │  │  External tool servers (fetch, github, …)
-  │  └───────┘  │
-  └──────┬──────┘
-         │ registers + token usage
-         ▼
-   stdout / response
+```mermaid
+flowchart TD
+    Source[".ss source file"]
+    Decoder["Decoder<br/>(decoder.py)"]
+    Program["Program<br/>(opcodes.py)"]
+    VMBox["VM<br/>(vm.py)"]
+    ALU["ALU (LLM)<br/>LLM inference — the computation unit"]
+    Tools["Built-in Tools<br/>9 local tools (%read, %write, %add, …)"]
+    MCP["MCP<br/>External tool servers (fetch, github, …)"]
+    Output["stdout / response"]
+
+    Source --> Decoder
+    Decoder -->|"list of Opcode objects"| Program
+    Program --> VMBox
+    VMBox --> ALU
+    VMBox --> Tools
+    VMBox --> MCP
+    VMBox -->|"registers + token usage"| Output
 ```
 
 ## The Model as ALU
@@ -44,31 +27,20 @@
 A traditional CPU has an **ALU** (Arithmetic Logic Unit) that performs computation —
 addition, bitwise ops, comparisons. In ss, the **LLM is the ALU**.
 
-```
-       Traditional CPU                  ss VM
-  ┌──────────────────┐          ┌──────────────────┐
-  │   Control Unit   │          │   Control Flow   │
-  │   (fetches,      │          │   (if/for/def/   │
-  │    decodes,      │          │    call/return)   │
-  │    jumps)        │          │                  │
-  ├──────────────────┤          ├──────────────────┤
-  │   Registers      │          │   $registers     │
-  │   (RAX, RBX, …)  │          │   ($prompt, …)   │
-  ├──────────────────┤          ├──────────────────┤
-  │   ALU            │          │   LLM (infer)    │
-  │   (add, sub,     │          │   (reasoning,    │
-  │    and, or, cmp) │          │    summarization,│
-  └──────────────────┘          │    generation)   │
-                                ├──────────────────┤
-                                │   Built-in Tools │
-                                │   (add, sum,     │
-                                │    read, write,  │
-                                │    join, …)      │
-                                ├──────────────────┤
-                                │   MCP Servers    │
-                                │   (fetch, github,│
-                                │    filesystem, …)│
-                                └──────────────────┘
+```mermaid
+flowchart LR
+    subgraph Traditional["Traditional CPU"]
+        CU["Control Unit<br/>(fetches, decodes, jumps)"]
+        Regs["Registers<br/>(RAX, RBX, …)"]
+        ALU_Classic["ALU<br/>(add, sub, and, or, cmp)"]
+    end
+    subgraph SS["ss VM"]
+        CF["Control Flow<br/>(if/for/def/call/return)"]
+        SRegs["$registers<br/>($prompt, …)"]
+        LLM["LLM (infer)<br/>(reasoning, summarization, generation)"]
+        BT["Built-in Tools<br/>(add, sum, read, write, join, …)"]
+        MCP["MCP Servers<br/>(fetch, github, filesystem, …)"]
+    end
 ```
 
 The key design principle: **the LLM never makes control-flow decisions**. It generates
@@ -76,18 +48,29 @@ content (strings, JSON, code) and writes results to registers. The `.ss` script'
 `if`/`for`/`def`/`return` structures determine what runs next — the LLM is purely
 a data transformer.
 
-```
-  Control Flow (ss script)         Data (registers)       Computation (LLM)
-  ┌─────────────────┐             ┌──────────────┐       ┌─────────────────┐
-  │  for each $item  │─────┬─────▶│  $results    │──────▶│  infer "extract  │
-  │  in $results:    │     │      │  $summary    │◀──────│  key facts from  │
-  │    $summary =    │     │      │  $answer     │       │  $results"       │
-  │    infer "..."   │─────┘      └──────────────┘       └─────────────────┘
-  │  end             │
-  │                  │
-  │  $final =        │
-  │  infer "..."     │
-  └─────────────────┘
+```mermaid
+flowchart LR
+    subgraph CF["Control Flow (ss script)"]
+        Loop["for each $item<br/>in $results:"]
+        Infer["$summary = infer ..."]
+        End["end"]
+        Final["$final = infer ..."]
+    end
+    subgraph D["Data (registers)"]
+        R1["$results"]
+        R2["$summary"]
+        R3["$answer"]
+    end
+    subgraph C["Computation (LLM)"]
+        LLM['infer "extract key facts<br/>from $results"']
+    end
+
+    Loop -.-> R1
+    Loop --> Infer
+    Infer --> R2
+    R1 --> LLM
+    LLM --> R2
+    Final -.-> R3
 ```
 
 ## Opcodes
