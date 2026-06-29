@@ -24,7 +24,7 @@ class VM:
         self.halted = False
         self.import_registry = {}
         self.skills: Dict[str, Dict[str, Any]] = {}
-        self.loaded_skills: Dict[str, LoadedSkill] = {}
+        self.loaded_skills: Dict[str, Any] = {}
         self.jump_targets: Dict[int, int] = {} # ip -> target_ip
         self.token_usage: List[Dict[str, int]] = []
         self.mcp = MCPManager()
@@ -222,6 +222,24 @@ class VM:
                         result = ls.instructions
                     elif tool_name in ("description",):
                         result = ls.description
+                    elif not ls.scripts and ls.instructions:
+                        # File-imported skill: use instructions + args as infer prompt
+                        user_input = ' '.join(str(self.evaluate(a)) for a in args) if args else ""
+                        prompt = f"{ls.instructions}\n\n{user_input}" if user_input else ls.instructions
+                        prompt_preview = prompt[:120].replace("\n", "\\n")
+                        print(f"  Skill infer ({server_name}): {len(prompt)} chars, \"{prompt_preview}...\"", file=sys.stderr, flush=True)
+                        try:
+                            response = self.client.chat.completions.create(
+                                model=self.config["model"],
+                                messages=[{"role": "user", "content": prompt}]
+                            )
+                            usage = getattr(response, "usage", None)
+                            if usage:
+                                self.token_usage.append({"prompt": usage.prompt_tokens, "completion": usage.completion_tokens, "total": usage.total_tokens})
+                            result = response.choices[0].message.content.strip()
+                        except Exception as e:
+                            print(f"DEBUG: Skill infer failed: {e}", file=sys.stderr, flush=True)
+                            result = f"Error inferring with skill '{server_name}': {e}"
                     else:
                         result = f"Error: Tool '{tool_name}' not found in skill '{server_name}'"
                 elif name == "append":
@@ -396,13 +414,26 @@ class VM:
                 self.ip = target_ip - 1
 
         elif opcode.type == OpcodeType.IMPORT:
+            import_type = opcode.params.get("import_type", "mcp")
             name = opcode.params.get("name")
             source = opcode.params.get("source")
-            try:
-                self.mcp.add_server(name, source)
-                self.import_registry[name] = source
-            except Exception as e:
-                print(f"Error: Failed to import MCP server '{name}' from {source}: {e}")
+
+            if import_type == "mcp":
+                try:
+                    self.mcp.add_server(name, source)
+                    self.import_registry[name] = source
+                except Exception as e:
+                    print(f"Error: Failed to import MCP server '{name}' from {source}: {e}")
+            elif import_type == "skill_file":
+                try:
+                    self._import_skill_file(name, source)
+                except Exception as e:
+                    print(f"Error: Failed to import skill '{name}' from {source}: {e}")
+            elif import_type == "skill_remote":
+                try:
+                    self._import_remote_skill(name, source)
+                except Exception as e:
+                    print(f"Error: Failed to import remote skill '{name}' from {source}: {e}")
 
         elif opcode.type == OpcodeType.LOAD_SKILL:
             skill_path = opcode.params.get("path", "")
@@ -425,6 +456,71 @@ class VM:
 
         elif opcode.type == OpcodeType.HALT:
             self.halted = True
+
+    def _import_skill_file(self, alias: str, source: str):
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        path = Path(source).expanduser()
+        if not path.exists():
+            print(f"Error: Skill file not found: {path}")
+            return
+        content = path.read_text()
+        description = f"Imported from {source}"
+
+        ls = SimpleNamespace(
+            path=None, alias=alias, name=alias,
+            description=description, instructions=content,
+            scripts={}, references={}, metadata={},
+        )
+        self.loaded_skills[alias] = ls
+        self.registers[f"${alias}_instructions"] = content
+        self.registers[f"${alias}_meta"] = json.dumps({
+            "name": alias, "description": description, "alias": alias,
+            "metadata": {}, "scripts": [], "references": [],
+        })
+
+    def _import_remote_skill(self, alias: str, source: str):
+        """Resolve a remote skill URI and load it.  Supports anthropic:// URIs."""
+        from pathlib import Path
+        from types import SimpleNamespace
+        import tempfile, urllib.request
+
+        if source.startswith("anthropic://"):
+            skill_id = source[len("anthropic://"):].strip("/")
+            registry_url = self.config.get("skill_registry", "https://api.anthropic.com/v1/skills")
+            url = f"{registry_url}/{skill_id}"
+            print(f"  Fetching remote skill from {url}...", file=sys.stderr, flush=True)
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "structured-skills/1.0"})
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    data = json.loads(resp.read().decode())
+                content = data.get("instructions", data.get("prompt", data.get("content", json.dumps(data))))
+                description = data.get("description", f"Remote skill: {skill_id}")
+            except Exception as e:
+                print(f"Error fetching remote skill: {e}", file=sys.stderr, flush=True)
+                return
+        elif source.startswith("npx://"):
+            print("npx:// skill imports not yet implemented", file=sys.stderr, flush=True)
+            return
+        elif source.startswith("uvx://"):
+            print("uvx:// skill imports not yet implemented", file=sys.stderr, flush=True)
+            return
+        else:
+            print(f"Unknown skill source scheme: {source}", file=sys.stderr, flush=True)
+            return
+
+        ls = SimpleNamespace(
+            path=None, alias=alias, name=alias,
+            description=description, instructions=content,
+            scripts={}, references={}, metadata={},
+        )
+        self.loaded_skills[alias] = ls
+        self.registers[f"${alias}_instructions"] = content
+        self.registers[f"${alias}_meta"] = json.dumps({
+            "name": alias, "description": description, "alias": alias,
+            "metadata": {}, "scripts": [], "references": [],
+        })
 
     def _execute_recommend(self, block: str) -> list:
         import re

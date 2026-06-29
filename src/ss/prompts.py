@@ -12,7 +12,10 @@ OPCODE SCHEMA:
 - END: {"type": "END", "params": {}}
 - DEF: {"type": "DEF", "params": {"name": "skill_name", "params": ["$arg1", "$arg2"]}}
 - RETURN: {"type": "RETURN", "params": {"value": "$var_or_literal"}}
-- IMPORT: {"type": "IMPORT", "params": {"name": "name", "source": "source"}}
+- IMPORT: {"type": "IMPORT", "params": {"name": "name", "source": "source", "import_type": "mcp|skill_file|skill_remote"}}
+  - MCP: import X from uvx://pkg  (import_type: "mcp")
+  - Skill file: import somefile.md [as alias]  (import_type: "skill_file")
+  - Remote skill: import skill alias from anthropic://...  (import_type: "skill_remote")
 - LOAD_SKILL: {"type": "LOAD_SKILL", "params": {"path": "path/to/skill", "alias": "name"}}
 - HALT: {"type": "HALT", "params": {}}
 

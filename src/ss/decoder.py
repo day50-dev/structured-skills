@@ -227,13 +227,31 @@ class Decoder:
                 prompt = prompt_raw.strip().strip('"').strip("'")
             return [Opcode(type=OpcodeType.INFER, params={"prompt": prompt})]
 
-        # IMPORT
-        if line.startswith("import "):
+        # IMPORT — remote skill: import skill <alias> from <source>
+        if line.startswith("import skill "):
+            m = re.match(r"import\s+skill\s+([\w\.-]+)\s+from\s+(.*)", line)
+            if m:
+                return [Opcode(type=OpcodeType.IMPORT, params={"name": m.group(1), "source": m.group(2).strip(), "import_type": "skill_remote"})]
+
+        # IMPORT — MCP: import <name> from <source>
+        if line.startswith("import ") and " from " in line:
             import_match = re.match(r"import\s+([\w\.-]+)\s+from\s+(.*)", line)
             if import_match:
-                name = import_match.group(1)
-                source = import_match.group(2)
-                return [Opcode(type=OpcodeType.IMPORT, params={"name": name, "source": source})]
+                return [Opcode(type=OpcodeType.IMPORT, params={"name": import_match.group(1), "source": import_match.group(2), "import_type": "mcp"})]
+
+        # IMPORT — skill file with alias: import <path> as <alias>
+        if line.startswith("import ") and " as " in line:
+            m = re.match(r"import\s+([\w\./-]+)\s+as\s+(\w+)", line)
+            if m:
+                return [Opcode(type=OpcodeType.IMPORT, params={"name": m.group(2), "source": m.group(1), "import_type": "skill_file"})]
+
+        # IMPORT — simple skill file: import <path>
+        if line.startswith("import "):
+            m = re.match(r"import\s+([\w\./-]+)", line)
+            if m:
+                from pathlib import Path
+                alias = Path(m.group(1)).stem
+                return [Opcode(type=OpcodeType.IMPORT, params={"name": alias, "source": m.group(1), "import_type": "skill_file"})]
 
         # LOAD SKILL
         if line.startswith("load "):

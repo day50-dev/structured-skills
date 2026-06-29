@@ -123,6 +123,30 @@ $info = %github.get_repo owner=$owner repo=$repo
 
 Args with `=` are key-value pairs. Values auto-convert (`8000` → int, `True` → bool). Server flags go in the query string.
 
+## Skills (Import)
+
+Import markdown files or skill directories as first-class objects. The content becomes the skill's instructions, callable via `%`:
+
+```ss
+import somefile.md                     # simple import, alias = "somefile"
+import somefile.md as myskill          # with explicit alias
+
+$instructions = %myskill.instructions  # get the raw instructions
+$result = %myskill(analyze: $data)     # infer using instructions + args
+```
+
+For full Anthropic-standard skill directories (containing `SKILL.md`, `scripts/`, `references/`):
+
+```ss
+load skill ./path/to/skill-dir as my-skill  # existing directory-based loading
+```
+
+Remote skill imports (future):
+
+```ss
+import skill alias from anthropic://skills/some-skill
+```
+
 ## Built-in Tools
 
 | Tool | Args | Purpose |

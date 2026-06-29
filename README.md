@@ -10,7 +10,7 @@ The premise of this project lies on this definition: An agent is a context-rich 
 
 Let's break it down. There's a recommendation system that uses context to take action on someone's behalf. Here's how strusky breaks that down and makes building agents easy:
 
-Control-flow is done through a classical vm using instruction pointers, opcodes, and a set of primitives with a notable exception. Instead of a virtual ALU, the LLM is the ALU and uses structured output to control the program. This allows for primitives not to be classic boolean logic but instead to be language and structure based. MCPs, skills, these are first class objects. The transformer is the foundational unit of computation for the fuzzy tasks.
+Control-flow is done through a classical vm using instruction pointers, opcodes, and a set of primitives with a notable exception. Instead of a virtual ALU, the LLM is the ALU and uses structured output to control the program. This allows for primitives not to be classic boolean logic but instead to be language and structure based. MCPs (imported via `import X from uvx://...`) and skills (imported via `import file.md` or `load skill path as alias`) are all first-class objects with register access and `%` callable syntax. The transformer is the foundational unit of computation for the fuzzy tasks.
 
 Recommender systems are specificed using declarative programming paradigms, punting the actual SOTA mechanics to be both out of scope and flexible. It uses structured input and output. 
 
@@ -119,6 +119,31 @@ Multiple flags: `uvx://package?--flag1&--flag2`
 import fetch from uvx://mcp-server-fetch     # Python/PyPI via uvx
 import fetch from npx://@modelcontextprotocol/server-fetch  # Node/npm via npx
 import my-server from mcp_servers.json        # JSON config file
+```
+
+### Skill Import
+
+Import markdown files or skill directories as first-class objects:
+
+```ss
+import somefile.md                     # simple — alias = filename stem
+import somefile.md as myskill          # with explicit alias
+
+$result = %myskill(analyze: $data)     # infer using instructions + args
+```
+
+Calling an imported skill runs inference with the file content as instructions and the call arguments as user input. Access raw instructions via `%myskill.instructions`.
+
+For Anthropic-standard skill directories (containing `SKILL.md`, scripts, references):
+
+```ss
+load skill ./path/to/skill-dir as my-skill
+```
+
+Remote skills via Anthropic registry:
+
+```ss
+import skill alias from anthropic://skills/some-skill
 ```
 
 ## Debugging (DAP Protocol)
