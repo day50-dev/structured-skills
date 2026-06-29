@@ -14,7 +14,7 @@ Control-flow is done through a classical VM using instruction pointers, opcodes,
 
 Recommender systems are specificed using declarative programming paradigms, punting the actual SOTA mechanics to be both out of scope and flexible. It uses structured input and output. Read the [docs](/docs/recommender.md).
 
-The Agency part of the agent is the emergent property of these because models are fundamentally stateless systems. Context merely provides the illusion of state. So strusky exploits the true tabulea rasa nature of models as much as possible.
+The Agency part of the agent is the emergent property of these. Models are fundamentally stateless systems. In the way that the append only context pattern gives rise to state, Strusky exploits the true tabulea rasa nature of models at uses the control flow and context management to give rise to agency.
 
 The programming language is designed to look like existing languages because it is intended to be written with a coding harness. 
 
