@@ -619,6 +619,148 @@ header .actions { display: flex; gap: 8px; }
 .empty-state .icon { font-size: 36px; margin-bottom: 12px; opacity: 0.3; }
 .empty-state p { font-size: 13px; line-height: 1.6; }
 
+/* Debugger Panel */
+.debug-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-top: 12px;
+}
+.debug-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.debug-toolbar .btn { font-size: 11px; padding: 4px 10px; }
+.debug-toolbar .debug-status {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text2);
+  font-family: var(--font);
+}
+.debug-toolbar .debug-status.running { color: var(--orange); }
+.debug-toolbar .debug-status.paused { color: var(--green); }
+.debug-toolbar .debug-status.finished { color: var(--text2); }
+.debug-layout {
+  display: flex;
+  min-height: 300px;
+  max-height: 520px;
+}
+.debug-source {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 8px 0;
+  min-width: 0;
+}
+.debug-source .debug-line {
+  display: flex;
+  padding: 0 8px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+.debug-source .debug-line:hover { background: var(--surface); }
+.debug-source .debug-line.active {
+  background: rgba(68, 221, 102, 0.12);
+  border-left-color: var(--green);
+}
+.debug-source .debug-line.bp-set {
+  border-left-color: var(--red);
+}
+.debug-source .debug-line.bp-set.active {
+  border-left-color: var(--orange);
+}
+.debug-source .debug-line .bp-marker {
+  width: 14px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10px;
+  color: var(--red);
+  user-select: none;
+}
+.debug-source .debug-line .dl-num {
+  width: 32px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--text2);
+  opacity: 0.5;
+  user-select: none;
+  padding-right: 8px;
+  font-size: 11px;
+}
+.debug-source .debug-line.active .dl-num { opacity: 1; color: var(--green); font-weight: 700; }
+.debug-source .debug-line .dl-code {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  opacity: 0.7;
+}
+.debug-source .debug-line.active .dl-code { opacity: 1; }
+.debug-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+}
+.debug-sidebar-section {
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text2);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+.debug-registers {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+  font-family: var(--font);
+  font-size: 11px;
+}
+.debug-registers .dr-row {
+  display: flex;
+  padding: 3px 10px;
+  gap: 8px;
+}
+.debug-registers .dr-row:hover { background: var(--surface2); }
+.debug-registers .dr-name {
+  color: var(--accent2);
+  white-space: nowrap;
+  font-weight: 600;
+  min-width: 60px;
+}
+.debug-registers .dr-val {
+  color: var(--text);
+  word-break: break-all;
+  overflow: hidden;
+  max-height: 3em;
+}
+.debug-stack {
+  max-height: 160px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border);
+  padding: 4px 0;
+  font-family: var(--font);
+  font-size: 11px;
+}
+.debug-stack .ds-frame {
+  padding: 3px 10px;
+  color: var(--text2);
+}
+.debug-stack .ds-frame:hover { background: var(--surface2); }
+
 /* Loading overlay on agent list */
 .loading-dots::after {
   content: '';
@@ -696,11 +838,33 @@ header .actions { display: flex; gap: 8px; }
           <div id="inputSpecs" class="input-specs" style="display:none"></div>
           <div class="run-prompt-area" style="margin-top:8px">
             <button class="btn btn-primary" onclick="runAgent()" id="runBtn">Run</button>
+            <button class="btn btn-secondary" onclick="startDebug()" id="debugBtn">Debug</button>
           </div>
           <div id="runOutputArea" style="display:none">
             <div id="runProgress" style="display:none;margin-bottom:8px;padding:8px 12px;background:var(--surface2);border-radius:var(--radius);font-family:var(--font);font-size:12px;line-height:1.5;white-space:pre-wrap;color:var(--text2)"></div>
             <div id="runTokens" class="token-info"></div>
             <div class="run-output" id="runOutput"></div>
+          </div>
+
+          <!-- Debug Panel -->
+          <div class="debug-panel" id="debugPanel" style="display:none">
+            <div class="debug-toolbar">
+              <button class="btn btn-primary btn-sm" onclick="debugCmd('step')" id="dbgStep">Step</button>
+              <button class="btn btn-secondary btn-sm" onclick="debugCmd('step_in')" id="dbgStepIn">Step In</button>
+              <button class="btn btn-secondary btn-sm" onclick="debugCmd('step_out')" id="dbgStepOut">Step Out</button>
+              <button class="btn btn-secondary btn-sm" onclick="debugCmd('continue')" id="dbgContinue">Continue</button>
+              <button class="btn btn-danger btn-sm" onclick="stopDebug()" id="dbgStop">Stop</button>
+              <span class="debug-status" id="debugStatus">starting...</span>
+            </div>
+            <div class="debug-layout">
+              <div class="debug-source" id="debugSource"></div>
+              <div class="debug-sidebar">
+                <div class="debug-sidebar-section">Registers</div>
+                <div class="debug-registers" id="debugRegisters"><div style="padding:10px;color:var(--text2);font-size:11px">(empty)</div></div>
+                <div class="debug-sidebar-section" style="border-top:1px solid var(--border)">Call Stack</div>
+                <div class="debug-stack" id="debugStack"><div style="padding:10px;color:var(--text2);font-size:11px">(empty)</div></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1349,8 +1513,203 @@ function displayRunOutput(registers, tokens, progress) {
   out.innerHTML = html;
 }
 
+// ── Debugger ──────────────────────────────────────────────
+let debugSessionId = null;
+let debugPollTimer = null;
+let debugSourceLines = [];
+let debugBreakpoints = new Set();
+
+async function startDebug() {
+  if (!currentAgent) return;
+  const btn = document.getElementById('debugBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Starting...';
+
+  const inputs = {};
+  if (currentInputSpecs) {
+    for (const spec of currentInputSpecs) {
+      const el = document.getElementById('input_' + spec.name);
+      if (el) inputs[spec.name] = el.value;
+    }
+  }
+
+  try {
+    const data = await api('POST', `/api/agents/${encodeURIComponent(currentAgent.name)}/debug`, { inputs }, 30000);
+    if (data.error) { showToast(data.error, 'error'); return; }
+    debugSessionId = data.session_id;
+    if (!debugSessionId) {
+      showToast('Debug session failed to start', 'error');
+      return;
+    }
+
+    debugSourceLines = data.source_lines || [];
+    debugBreakpoints = new Set();
+
+    showDebugPanel();
+    renderDebugSource();
+    updateDebugUI(data);
+    debugSessionId && pollDebugState();
+  } catch (e) {
+    showToast('Failed to start debugger: ' + (e.message || e), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Debug';
+  }
+}
+
+function showDebugPanel() {
+  document.getElementById('runOutputArea').style.display = 'none';
+  document.getElementById('debugPanel').style.display = '';
+}
+
+function hideDebugPanel() {
+  document.getElementById('debugPanel').style.display = 'none';
+}
+
+function pollDebugState() {
+  if (debugPollTimer) clearInterval(debugPollTimer);
+  debugPollTimer = setInterval(async () => {
+    if (!debugSessionId) return;
+    try {
+      const res = await fetch(`/api/debug/${debugSessionId}`);
+      if (!res.ok) { stopDebug(); return; }
+      const state = await res.json();
+      updateDebugUI(state);
+      if (state.status === 'finished' || state.halted) {
+        stopDebug();
+      }
+    } catch (e) {
+      // connection issue, ignore
+    }
+  }, 300);
+}
+
+async function debugCmd(cmd, arg) {
+  if (!debugSessionId) return;
+  try {
+    const data = await api('POST', `/api/debug/${debugSessionId}/command`, { command: cmd, arg }, 10000);
+    if (data.error) showToast(data.error, 'error');
+  } catch (e) {
+    showToast('Command failed: ' + (e.message || e), 'error');
+  }
+}
+
+async function stopDebug() {
+  if (debugPollTimer) { clearInterval(debugPollTimer); debugPollTimer = null; }
+  if (debugSessionId) {
+    try { await fetch(`/api/debug/${debugSessionId}`, { method: 'DELETE' }); } catch (e) {}
+    debugSessionId = null;
+  }
+  debugSourceLines = [];
+  debugBreakpoints = new Set();
+  hideDebugPanel();
+  document.getElementById('debugBtn').disabled = false;
+  document.getElementById('debugBtn').innerHTML = 'Debug';
+}
+
+function renderDebugSource() {
+  const el = document.getElementById('debugSource');
+  if (!debugSourceLines || debugSourceLines.length === 0) {
+    el.innerHTML = '<div style="padding:16px;color:var(--text2);font-size:12px">(no source)</div>';
+    return;
+  }
+  let html = '';
+  for (let i = 0; i < debugSourceLines.length; i++) {
+    const lineNum = i + 1;
+    const text = escHtml(debugSourceLines[i]);
+    const bp = debugBreakpoints.has(lineNum) ? '●' : '&nbsp;';
+    html += `<div class="debug-line" id="dl_${lineNum}" onclick="toggleBreakpoint(${lineNum})" data-line="${lineNum}">
+      <span class="bp-marker">${bp}</span>
+      <span class="dl-num">${lineNum}</span>
+      <span class="dl-code">${text}</span>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+function toggleBreakpoint(lineNum) {
+  if (debugBreakpoints.has(lineNum)) {
+    debugBreakpoints.delete(lineNum);
+  } else {
+    debugBreakpoints.add(lineNum);
+  }
+  // Apply visual change immediately
+  const el = document.getElementById('debugSource');
+  const lines = el.querySelectorAll('.debug-line');
+  for (const line of lines) {
+    const ln = parseInt(line.dataset.line);
+    const marker = line.querySelector('.bp-marker');
+    if (debugBreakpoints.has(ln)) {
+      marker.textContent = '●';
+      line.classList.add('bp-set');
+    } else {
+      marker.textContent = '\u00A0';
+      line.classList.remove('bp-set');
+    }
+  }
+  // Send breakpoint change to server
+  if (debugSessionId) {
+    if (debugBreakpoints.has(lineNum)) {
+      debugCmd('break', lineNum);
+    } else {
+      debugCmd('clear', lineNum);
+    }
+  }
+}
+
+function updateDebugUI(state) {
+  // Status
+  const statusEl = document.getElementById('debugStatus');
+  const reason = state.reason || '';
+  const line = state.current_line || '';
+  statusEl.textContent = `${state.status}${reason ? ' (' + reason + ')' : ''} at line ${line}`;
+  statusEl.className = 'debug-status ' + (state.status || '');
+
+  // Source highlight
+  const source = document.getElementById('debugSource');
+  const lines = source.querySelectorAll('.debug-line');
+  for (const line of lines) {
+    line.classList.remove('active');
+    const ln = parseInt(line.dataset.line);
+    if (ln === state.current_line) {
+      line.classList.add('active');
+      line.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+
+  // Registers
+  const regEl = document.getElementById('debugRegisters');
+  const regs = state.registers || {};
+  const regKeys = Object.keys(regs);
+  if (regKeys.length === 0) {
+    regEl.innerHTML = '<div style="padding:10px;color:var(--text2);font-size:11px">(empty)</div>';
+  } else {
+    let html = '';
+    for (const key of regKeys) {
+      let val = String(regs[key]);
+      if (val.length > 200) val = val.slice(0, 197) + '...';
+      html += `<div class="dr-row"><span class="dr-name">${escHtml(key)}</span><span class="dr-val">${escHtml(val)}</span></div>`;
+    }
+    regEl.innerHTML = html;
+  }
+
+  // Call stack
+  const stackEl = document.getElementById('debugStack');
+  const stack = state.call_stack || [];
+  if (stack.length === 0) {
+    stackEl.innerHTML = '<div style="padding:10px;color:var(--text2);font-size:11px">(empty)</div>';
+  } else {
+    let html = '';
+    for (const frame of stack) {
+      const loc = frame.source_line ? `line ${frame.source_line}` : `ip ${frame.return_ip}`;
+      const tgt = frame.target_register ? ` → ${frame.target_register}` : '';
+      html += `<div class="ds-frame">return to ${loc}${tgt}</div>`;
+    }
+    stackEl.innerHTML = html;
+  }
+}
+
 // Toast
-function showToast(msg, type) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className = 'toast ' + (type || '') + ' show';

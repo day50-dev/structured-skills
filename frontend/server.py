@@ -241,11 +241,11 @@ def _build_program(name, inputs=None, prompt_text=""):
             imports.append(s)
     ctx = "\n".join(imports)
     pp_lines = preprocess_lines(lines)
-    for line in pp_lines:
+    for line_num, line in enumerate(pp_lines, start=1):
         s = line.strip()
         if not s or s.startswith("#") or s.startswith("input "):
             continue
-        program.extend(decoder.decode_line(s, imports_context=ctx))
+        program.extend(decoder.decode_line(s, imports_context=ctx, line_number=line_num))
 
     return lines, pp_lines, program, config_path
 
@@ -298,11 +298,11 @@ def run_code(code_text, inputs=None):
         if s.startswith("import "):
             imports.append(s)
     ctx = "\n".join(imports)
-    for line in preprocess_lines(all_lines):
+    for line_num, line in enumerate(preprocess_lines(all_lines), start=1):
         s = line.strip()
         if not s or s.startswith("#") or s.startswith("input "):
             continue
-        program.extend(decoder.decode_line(s, imports_context=ctx))
+        program.extend(decoder.decode_line(s, imports_context=ctx, line_number=line_num))
 
     vm = VM(config_path=config_path)
     vm.load_program(program)
@@ -704,6 +704,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 lines, pp_lines, program, config_path = _build_program(name, inputs)
                 session = _session_manager.create(name, pp_lines, program, config_path)
                 state = session.get_state()
+                state["session_id"] = session.session_id
                 state["source_lines"] = pp_lines
                 self._json(200, state)
             except ValueError as e:
@@ -817,7 +818,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_DELETE(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path.startswith("/api/agents/"):
+        if parsed.path.startswith("/api/debug/"):
+            session_id = parsed.path[len("/api/debug/"):]
+            session = _session_manager.get(session_id)
+            if session:
+                session.command("stop")
+                _session_manager.remove(session_id)
+                self._json(200, {"ok": True})
+            else:
+                self._json(404, {"error": "Session not found"})
+        elif parsed.path.startswith("/api/agents/"):
             name = parsed.path[len("/api/agents/"):]
             if delete_agent(name):
                 self._json(200, {"ok": True})
