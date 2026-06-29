@@ -85,7 +85,8 @@ def main():
     parser.add_argument("-f", "--input-file", default=None, dest="input_file",
                         help="JSON file with key/value inputs")
     parser.add_argument("--config", default="config.toml", help="Path to config file (default: %(default)s)")
-    parser.add_argument("--debug", action="store_true", help="Start DAP debug server")
+    parser.add_argument("--debug", action="store_true", help="Start interactive REPL debugger")
+    parser.add_argument("--dap", action="store_true", help="Start DAP debug server (for VS Code)")
     parser.add_argument("--debug-host", default="127.0.0.1", help="DAP server host (default: 127.0.0.1)")
     parser.add_argument("--debug-port", type=int, default=4711, help="DAP server port (default: 4711)")
 
@@ -150,16 +151,20 @@ def main():
         opcodes = decoder.decode_line(line, imports_context=full_context, line_number=line_num)
         program.extend(opcodes)
 
-    if args.debug:
-        dap = DAPServer(host=args.debug_host, port=args.debug_port)
-        dap.vm = VM(config_path=args.config)
-        dap.vm.debug_mode = True
-        dap.vm.stopped_callback = dap._on_stopped
-        dap.vm.load_program(program)
-        t = threading.Thread(target=dap.serve, daemon=True)
-        t.start()
-        print(f"DAP server on {args.debug_host}:{args.debug_port}", file=sys.stderr, flush=True)
-        t.join()
+    if args.debug or args.dap:
+        if args.dap:
+            dap = DAPServer(host=args.debug_host, port=args.debug_port)
+            dap.vm = VM(config_path=args.config)
+            dap.vm.debug_mode = True
+            dap.vm.stopped_callback = dap._on_stopped
+            dap.vm.load_program(program)
+            t = threading.Thread(target=dap.serve, daemon=True)
+            t.start()
+            print(f"DAP server on {args.debug_host}:{args.debug_port}", file=sys.stderr, flush=True)
+            t.join()
+        else:
+            repl = DebugREPL(VM(config_path=args.config), pp_lines, program)
+            repl.run()
         return
 
     vm = VM(config_path=args.config)

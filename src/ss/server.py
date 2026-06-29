@@ -7,7 +7,7 @@ import http.server
 import urllib.parse
 from pathlib import Path
 
-from .decoder import Decoder, parse_input_specs
+from .decoder import Decoder, parse_input_specs, preprocess_lines
 from .vm import VM
 
 
@@ -36,7 +36,7 @@ def run_code(code: str, inputs: dict = None, config_path: str = "config.toml") -
         if s.startswith("import "):
             imports.append(s)
     ctx = "\n".join(imports)
-    for line in all_lines:
+    for line in preprocess_lines(all_lines):
         s = line.strip()
         if not s or s.startswith("#") or s.startswith("input "):
             continue

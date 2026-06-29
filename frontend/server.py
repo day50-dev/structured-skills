@@ -12,7 +12,7 @@ from pathlib import Path
 from openai import OpenAI
 from ss.config import load_config
 from ss.agent_create import _fix_script, _name_from_prompt
-from ss.decoder import Decoder, parse_input_specs, parse_output_specs
+from ss.decoder import Decoder, parse_input_specs, parse_output_specs, preprocess_lines
 
 HERE = Path(__file__).resolve().parent
 PROJECT = HERE.parent
@@ -240,7 +240,7 @@ def run_agent(name, prompt_text="", inputs=None):
         if s.startswith("import "):
             imports.append(s)
     ctx = "\n".join(imports)
-    for line in lines:
+    for line in preprocess_lines(lines):
         s = line.strip()
         if not s or s.startswith("#") or s.startswith("input "):
             continue
@@ -288,7 +288,7 @@ def run_code(code_text, inputs=None):
         if s.startswith("import "):
             imports.append(s)
     ctx = "\n".join(imports)
-    for line in all_lines:
+    for line in preprocess_lines(all_lines):
         s = line.strip()
         if not s or s.startswith("#") or s.startswith("input "):
             continue

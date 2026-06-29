@@ -344,6 +344,16 @@ class VM:
             if target and target.startswith("$"):
                 self.registers[target] = result
 
+        elif opcode.type == OpcodeType.RECOMMEND:
+            register = opcode.params.get("register")
+            block = opcode.params.get("block", "")
+            for reg, val in list(self.registers.items()):
+                if isinstance(reg, str) and reg.startswith("$"):
+                    block = block.replace(reg, str(val))
+            result = self._execute_recommend(block)
+            if register and register.startswith("$"):
+                self.registers[register] = result
+
         elif opcode.type == OpcodeType.IF:
             condition = opcode.params.get("condition")
             val = self.evaluate(condition)
@@ -418,6 +428,201 @@ class VM:
 
         elif opcode.type == OpcodeType.HALT:
             self.halted = True
+
+    def _execute_recommend(self, block: str) -> list:
+        import re
+
+        block = block.strip()
+
+        # --- Sources ---
+        sources = re.findall(r'<from>(.*?)</from>', block)
+
+        # --- Parse composed form (rules + select) vs flat form ---
+        has_rules = bool(re.search(r'<rule\s+id=', block))
+        select_m = re.search(r'<select\s+(.*?)/>', block)
+
+        if has_rules and select_m:
+            select_str = select_m.group(1)
+            _r = lambda n, d="": (m.group(1) if (m := re.search(rf'{n}="([^"]*)"', select_str)) else d)
+            select_rule = _r('rule')
+            rank_str = _r('rank')
+            limit = int((m.group(1) if (m := re.search(r'limit="?(\d+)"?', select_str)) else '0'))
+
+            rules = {}
+            for rm in re.finditer(r'<rule\s+id="(\w+)"(.*?)</rule>', block, re.DOTALL):
+                rid = rm.group(1)
+                b = rm.group(2)
+                rules[rid] = {
+                    'extends': re.findall(r'<extends>(.*?)</extends>', b),
+                    'match': [x.strip() for x in re.findall(r'<match>(.*?)</match>', b) if x.strip()],
+                    'reject': [x.strip() for x in re.findall(r'<reject>(.*?)</reject>', b) if x.strip()],
+                    'min_len': int(m.group(1)) if (m := re.search(r'min\s+length="(\d+)"', b)) else None,
+                    'max_len': int(m.group(1)) if (m := re.search(r'max\s+length="(\d+)"', b)) else None,
+                    'contains': [x.strip() for x in re.findall(r'<contains>(.*?)</contains>', b) if x.strip()],
+                    'matches': [x.strip() for x in re.findall(r'<matches>(.*?)</matches>', b) if x.strip()],
+                }
+
+            match_list: list = []
+            reject_list: list = []
+            min_len_val = None
+            max_len_val = None
+            contains_list: list = []
+            matches_list: list = []
+
+            def resolve(rid: str, visited: set) -> None:
+                if rid in visited or rid not in rules:
+                    return
+                visited.add(rid)
+                r = rules[rid]
+                for parent in r['extends']:
+                    resolve(parent.strip(), visited)
+                match_list.extend(r['match'])
+                reject_list.extend(r['reject'])
+                if r['min_len'] is not None:
+                    nonlocal min_len_val
+                    min_len_val = r['min_len']
+                if r['max_len'] is not None:
+                    nonlocal max_len_val
+                    max_len_val = r['max_len']
+                contains_list.extend(r['contains'])
+                matches_list.extend(r['matches'])
+
+            if select_rule:
+                resolve(select_rule, set())
+        else:
+            # --- Flat form ---
+            match_list = [x.strip() for x in re.findall(r'<match>(.*?)</match>', block) if x.strip()]
+            reject_list = [x.strip() for x in re.findall(r'<reject>(.*?)</reject>', block) if x.strip()]
+            min_len_val = int(m.group(1)) if (m := re.search(r'<min\s+length="(\d+)"\s*/>', block)) else None
+            max_len_val = int(m.group(1)) if (m := re.search(r'<max\s+length="(\d+)"\s*/>', block)) else None
+            contains_list = [x.strip() for x in re.findall(r'<contains>(.*?)</contains>', block) if x.strip()]
+            matches_list = [x.strip() for x in re.findall(r'<matches>(.*?)</matches>', block) if x.strip()]
+
+            limit = int(m.group(1)) if (m := re.search(r'<limit>\s*(\d+)\s*</limit>', block)) else None
+            rank_str = None
+            rm = re.search(r'<rank\s+by="(\w+)"\s+context="([^"]*)"\s*/>', block)
+            if rm:
+                rank_str = f"{rm.group(1)} {rm.group(2)}"
+            else:
+                rm2 = re.search(r'<rank>(.*?)</rank>', block, re.DOTALL)
+                if rm2:
+                    rank_str = rm2.group(1).strip()
+
+        # --- Collect items from source registers ---
+        all_items: list = []
+        for src in sources:
+            src = src.strip()
+            if src.startswith('$'):
+                val = self.registers.get(src)
+                if isinstance(val, list):
+                    all_items.extend(val)
+                elif isinstance(val, str):
+                    try:
+                        parsed = json.loads(val)
+                        if isinstance(parsed, list):
+                            all_items.extend(parsed)
+                        else:
+                            all_items.append(val)
+                    except (json.JSONDecodeError, TypeError):
+                        all_items.append(val)
+                elif val is not None:
+                    all_items.append(val)
+
+        if not all_items:
+            return []
+
+        # --- Apply structural filters ---
+        filtered: list = []
+        for item in all_items:
+            s = str(item)
+            if min_len_val is not None and len(s) < min_len_val:
+                continue
+            if max_len_val is not None and len(s) > max_len_val:
+                continue
+            if contains_list and not all(c in s for c in contains_list):
+                continue
+            if matches_list:
+                ok = True
+                for pat in matches_list:
+                    try:
+                        if not re.search(pat, s):
+                            ok = False
+                            break
+                    except re.error:
+                        ok = False
+                        break
+                if not ok:
+                    continue
+            filtered.append(item)
+
+        if not filtered:
+            return []
+
+        # --- Semantic filtering + ranking via LLM ---
+        need_llm = bool(match_list or reject_list or rank_str)
+
+        if need_llm:
+            prompt_parts = []
+            if match_list:
+                prompt_parts.append("Include items that satisfy ALL of these criteria:\n" + "\n".join(f"- {m}" for m in match_list))
+            if reject_list:
+                prompt_parts.append("Exclude items that satisfy ANY of these criteria:\n" + "\n".join(f"- {r}" for r in reject_list))
+            if rank_str:
+                prompt_parts.append(f"Rank items by: {rank_str}")
+
+            criteria_text = "\n\n".join(prompt_parts)
+
+            items_json = json.dumps(
+                [{"i": idx, "c": str(item)[:2000]} for idx, item in enumerate(filtered)],
+                indent=2
+            )
+
+            prompt = f"""You are a recommender system. Select and rank items based on criteria.
+
+{criteria_text}
+
+Items:
+{items_json}
+
+Return a JSON array of item indices (0-based) in ranked order (best first).
+Only include items that match the inclusion criteria and don't match exclusion criteria.
+Example: [3, 0, 7]
+Return ONLY the JSON array, no other text."""
+
+            prompt_preview = prompt[:120].replace("\n", "\\n")
+            print(f"  Recommending... (prompt: {len(prompt)} chars, \"{prompt_preview}...\")", file=sys.stderr, flush=True)
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.config["model"],
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                usage = getattr(response, "usage", None)
+                if usage:
+                    self.token_usage.append({
+                        "prompt": usage.prompt_tokens,
+                        "completion": usage.completion_tokens,
+                        "total": usage.total_tokens
+                    })
+                result_text = response.choices[0].message.content.strip()
+                array_match = re.search(r'\[.*?\]', result_text, re.DOTALL)
+                if array_match:
+                    indices = json.loads(array_match.group())
+                    filtered = [filtered[i] for i in indices if isinstance(i, int) and 0 <= i < len(filtered)]
+                else:
+                    try:
+                        indices = json.loads(result_text)
+                        if isinstance(indices, list):
+                            filtered = [filtered[i] for i in indices if isinstance(i, int) and 0 <= i < len(filtered)]
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+            except Exception as e:
+                print(f"DEBUG: Recommend LLM failed: {e}. Returning unfiltered.", file=sys.stderr, flush=True)
+
+        # --- Apply limit ---
+        if limit is not None and limit > 0:
+            filtered = filtered[:limit]
+
+        return filtered
 
     def evaluate(self, value: Any) -> Any:
         if isinstance(value, str):

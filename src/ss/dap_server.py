@@ -5,7 +5,7 @@ import threading
 import traceback
 from typing import Any, Dict, List, Optional
 
-from .decoder import Decoder
+from .decoder import Decoder, preprocess_lines
 from .vm import VM
 from .opcodes import OpcodeType
 
@@ -107,7 +107,7 @@ class DAPServer:
             decoder = Decoder(config_path=args.get("config", "config.toml"))
             import_lines = [l.strip() for l in all_lines if l.strip().startswith("import ")]
             program = []
-            for ln, line in enumerate(all_lines, start=1):
+            for ln, line in enumerate(preprocess_lines(all_lines), start=1):
                 if not line.strip() or line.strip().startswith("#"):
                     continue
                 ops = decoder.decode_line(line, imports_context="\n".join(import_lines), line_number=ln)

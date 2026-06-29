@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from ss.config import load_config, SETUP_GUIDANCE
-from ss.decoder import Decoder, parse_input_specs, parse_output_specs
+from ss.decoder import Decoder, parse_input_specs, parse_output_specs, preprocess_lines
 from ss.vm import VM
 from openai import OpenAI
 
@@ -71,7 +71,7 @@ def run_code(code_text, inputs=None):
         if s.startswith("import "):
             imports.append(s)
     ctx = "\n".join(imports)
-    for line in all_lines:
+    for line in preprocess_lines(all_lines):
         s = line.strip()
         if not s or s.startswith("#") or s.startswith("input "):
             continue
@@ -263,7 +263,7 @@ class DemoHandler(http.server.SimpleHTTPRequestHandler):
                 imports.append(line.strip())
         imports_context = "\n".join(imports)
 
-        for line in lines:
+        for line in preprocess_lines(lines):
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
                 continue
