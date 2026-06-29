@@ -329,6 +329,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             agents = [{"name": v["name"], "path": v["path"], "size": v["size"], "modified": v["modified"]}
                       for v in discover_agents().values()]
             self._json(200, {"agents": agents})
+        elif parsed.path == "/api/config":
+            config_path = PROJECT / "config.toml"
+            config = load_config(str(config_path))
+            self._json(200, config)
         elif parsed.path == "/api/guide":
             guide_path = PROJECT / "guide.md"
             if guide_path.exists():
@@ -499,7 +503,45 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_PUT(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path.startswith("/api/agents/"):
+        if parsed.path == "/api/config":
+            body = self._body()
+            model = body.get("model", "")
+            base_url = body.get("base_url", "")
+            api_key = body.get("api_key", "")
+            if not model or not base_url:
+                self._json(400, {"error": "model and base_url are required"})
+                return
+            config_path = PROJECT / "config.toml"
+            existing = config_path.read_text() if config_path.exists() else ""
+            # Collect all sections except [llm] (which we replace)
+            other_sections = []
+            current = []
+            in_llm = False
+            for line in existing.splitlines():
+                if line.strip().startswith("[") and line.strip().endswith("]"):
+                    if in_llm:
+                        in_llm = False
+                    if line.strip() == "[llm]":
+                        in_llm = True
+                        continue
+                    if current:
+                        other_sections.append("\n".join(current))
+                        current = []
+                if not in_llm:
+                    current.append(line)
+            if current:
+                other_sections.append("\n".join(current))
+            new_content = (
+                "[llm]\n"
+                f'model = "{model}"\n'
+                f'base_url = "{base_url}"\n'
+                f'api_key = "{api_key}"\n'
+            )
+            if other_sections:
+                new_content += "\n" + "\n\n".join(other_sections) + "\n"
+            config_path.write_text(new_content)
+            self._json(200, {"ok": True})
+        elif parsed.path.startswith("/api/agents/"):
             name = parsed.path[len("/api/agents/"):]
             body = self._body()
             content = body.get("content")

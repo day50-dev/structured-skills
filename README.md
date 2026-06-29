@@ -141,9 +141,7 @@ Any DAP-compatible client can connect to the TCP server on port 4711.
 | `./ss-debug` | Standalone DAP TCP server |
 | `./ss-debug-adapter` | Stdio DAP adapter (for VS Code) |
 | `./ss <file.ss>` | Run a script directly |
-| `ss server` | API server on port 8081 with Swagger UI |
-| `strusky-server` | Same as `ss server` (via pyproject.toml entry point) |
-| `python frontend/server.py` | Web UI on port 5555 |
+| `./start-frontend [agents-dir]` | Web UI on port 5555 |
 
 All output (Fetching, Thinking, results, tokens) goes to stderr/stdout with full visibility — no truncation, no hidden diagnostics.
 
@@ -158,56 +156,35 @@ All output (Fetching, Thinking, results, tokens) goes to stderr/stdout with full
 - **Opcodes** (`src/ss/opcodes.py`): 13-opcode IR (ASSIGN, CALL, INFER, LOOP, IF, ELSE, DEF, RETURN, IMPORT, LOAD_SKILL, JUMP, HALT).
 - **VM** (`src/ss/vm.py`): Register-based with call stack, loop stack, jump targets, MCP integration, token tracking, and DAP debug support.
 - **MCP** (`src/ss/mcp.py`): Manages MCP server processes (launch via uvx/npx/json, call tools, shutdown).
-- **Agent Create** (`src/ss/agent_create.py`): Template-based agent generator — LLM fills `INSTRUCTION_N` placeholders in a fixed `.ss` skeleton.
-
-## API Server
-
-A standalone HTTP server exposes the strusky VM as a REST API with Swagger UI:
-
-```bash
-ss server
-# → http://0.0.0.0:8081  (default port)
-```
-
-Or via the pyproject.toml entry point:
-
-```bash
-strusky-server
-```
-
-Override the default port with `--port`:
-
-```bash
-ss server --port 9000
-```
-
-**Endpoints:**
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /` | Server info |
-| `GET /openapi.json` | OpenAPI 3.1 spec |
-| `GET /docs` | Swagger UI for interactive API exploration |
-| `POST /run` | Execute strusky code with optional inputs |
-
-**Example `POST /run`:**
-
-```json
-{ "code": "input $NAME as string\n$result = \"hello, $NAME\"\n$prompt = $result", "input": { "NAME": "world" } }
-```
-
-Returns `{ "registers": {...}, "tokens": [...], "progress": "..." }`.
+- **Agent Create** (`src/ss/agent_create.py`): Free-form agent generator — LLM writes code from scratch using a syntax guide rather than filling placeholders.
+- **Frontend** (`frontend/`): Single-page web app for browsing, creating, editing, and running agents with streaming output and syntax highlighting.
 
 ## Frontend
 
 A single-page web app provides a GUI for managing and running agents:
 
 ```bash
-python frontend/server.py
+./start-frontend
 # → http://localhost:5555
 ```
 
-Features: agent list, create, view, edit, and run with live output and token display.
+Or with a custom agents directory:
+
+```bash
+./start-frontend /path/to/agents
+```
+
+Features:
+
+- **Agent list** — browse agents from `frontend/agents/`, `examples/`, and project root
+- **Create via chat** — describe an agent and the LLM generates it
+- **View/Edit tabs** — hash-routed as `#view/agent/<name>` and `#edit/agent/<name>`
+- **Syntax highlighting** — highlight.js with greyscale atom-one-dark theme
+- **Input specs** — dynamic typed input fields parsed from `input $X as TYPE` declarations
+- **Output display** — register table with token usage, progress from inference calls
+- **AI modification** — streaming modify with real-time token/reasoning display, auto-saves with git commit when `STRUSKY_OPTS=git` is set
+- **Guide** — full language reference at `/#guide`, rendered from `guide.md`
+- **`strusky.js`** — client-side library for parsing input/output specs from scripts
 
 ## Setup
 
@@ -216,7 +193,6 @@ pip install -e .
 cp config.toml.example config.toml
 # Edit config.toml with your LLM provider (model, base_url, api_key)
 cp .env.example .env       # optional — see STRUSKY_OPTS below
-# Edit .env to enable features like git auto-commit
 ```
 
 Requires Python 3.11+. For web search via MCP, [uvx](https://docs.astral.sh/uv/) is used automatically.
@@ -238,7 +214,7 @@ STRUSKY_OPTS=git
 
 ```
 src/ss/
-├── agent_create.py   Template-based agent generator
+├── agent_create.py   Free-form agent generator (SYNTAX_GUIDE)
 ├── agent_runner.py   Run agent with prepended $prompt
 ├── cli.py            Direct script runner
 ├── decoder.py        Regex + LLM decoder
@@ -253,6 +229,11 @@ src/ss/
 frontend/
 ├── server.py         HTTP API (port 5555)
 ├── index.html        Single-page web UI
+├── strusky.js        Client-side spec parsing library
+agents/               Default directory for created agents
+guide.md              Language reference (injected into LLM prompts)
+.env.example          Optional configuration template
+start-frontend        Entry point script
 ```
 
 ## License
