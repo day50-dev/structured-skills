@@ -238,6 +238,7 @@ start-frontend        Entry point script
 
 ## Documentation
 
+- [docs/architecture.md](docs/architecture.md) — VM architecture, opcode reference, built-in tools, pipeline diagram
 - [docs/server.md](docs/server.md) — API server reference (endpoints, request/response formats, CLI flags)
 - [docs/strusky.js.md](docs/strusky.js.md) — Client-side JS library (`parseInputSpecs`, `parseOutputSpecs`, `serve`)
 

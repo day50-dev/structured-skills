@@ -3,6 +3,7 @@ import os
 import sys
 import io
 import json
+import re
 import logging
 import contextlib
 import http.server
@@ -79,22 +80,33 @@ def _load_guide() -> str:
     return _GUIDE_CACHE
 
 _MODIFY_SYSTEM = """You are modifying an ss (Structured Skills) script.
+Output your changes as structured edits. Each edit replaces an exact piece of text in the original script with new text.
+
+Format:
+<edit>
+<old>
+precise text from the ORIGINAL SCRIPT to replace
+</old>
+<new>
+replacement text
+</new>
+</edit>
+
+Rules:
+- <old> must match the ORIGINAL SCRIPT exactly (same whitespace & casing)
+- Include enough surrounding lines so <old> matches uniquely
+- Make minimal edits — only change what the instruction asks for
+- Output multiple <edit> blocks for separate changes
+- NEVER output the entire script — only edit blocks
+- Preserve all code that should not change
 
 LANGUAGE REFERENCE:
 {guide}
 
-SCRIPT:
+ORIGINAL SCRIPT:
 {script}
 
-USER INSTRUCTION: {instruction}
-
-Rules:
-- Use $prompt for input and write the final answer back to $prompt
-- infer prompts must be imperative, direct, 1-3 sentences
-- Use %name.verb key=value syntax for MCP tool calls
-- Every def must have a matching end
-- Every if/for must have a matching end
-- Output ONLY the complete modified .ss script, no explanations, no markdown formatting"""
+INSTRUCTION: {instruction}"""
 
 
 def discover_agents():
@@ -298,6 +310,29 @@ def _escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace("\"", "\\\"")
 
 
+_EDIT_BLOCK_RE = re.compile(r'<edit>\s*<old>\s*(.*?)\s*</old>\s*<new>\s*(.*?)\s*</new>\s*</edit>', re.DOTALL)
+
+def _apply_edits(script: str, edit_text: str) -> str:
+    """Parse <edit> blocks from LLM output and apply them surgically to `script`.
+    Falls back to replacing the entire script if no edit blocks are found."""
+    text = edit_text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+    if text.endswith("```"):
+        text = text.rsplit("```", 1)[0]
+    edits = _EDIT_BLOCK_RE.findall(text)
+    if not edits:
+        return _fix_script(text)
+
+    result = script
+    for old, new in edits:
+        if old not in result:
+            raise ValueError(f"Edit block not found in script (match failed):\n---old---\n{old}\n---")
+        idx = result.index(old)
+        result = result[:idx] + new + result[idx + len(old):]
+    return result
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(HERE), **kwargs)
@@ -442,7 +477,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             self.wfile.flush()
                 usage = getattr(response, "usage", None)
                 tokens = {"prompt": usage.prompt_tokens, "completion": usage.completion_tokens, "total": usage.total_tokens} if usage else None
-                new_script = "# modify: " + body.get("instruction", "").replace("\n", " ") + "\n\n" + _fix_script(full_text)
+                script = _apply_edits(current_script, full_text)
+                new_script = "# modify: " + body.get("instruction", "").replace("\n", " ") + "\n\n" + script
                 event = json.dumps({"type": "done", "script": new_script, "tokens": tokens})
                 self.wfile.write(f"data: {event}\n\n".encode())
                 self.wfile.flush()
@@ -492,10 +528,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 raw = response.choices[0].message.content.strip()
                 if raw.startswith("```"): raw = raw.split("\n", 1)[1] if "\n" in raw else raw[3:]
                 if raw.endswith("```"): raw = raw.rsplit("```", 1)[0]
-                new_script = _fix_script(raw.strip())
+                script = _apply_edits(current_script, raw.strip())
                 usage = getattr(response, "usage", None)
                 tokens = {"prompt": usage.prompt_tokens, "completion": usage.completion_tokens, "total": usage.total_tokens} if usage else None
-                self._json(200, {"content": new_script, "tokens": tokens})
+                self._json(200, {"content": script, "tokens": tokens})
             except Exception as e:
                 logger.error("Modify failed: %s", e)
                 self._json(500, {"error": str(e)})
