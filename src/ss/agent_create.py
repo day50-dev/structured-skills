@@ -164,7 +164,7 @@ def _fix_script(script: str) -> str:
 
 
 def _call_llm(system_prompt: str, config: dict) -> tuple[str, dict | None]:
-    client = OpenAI(base_url=config["base_url"], api_key=config["api_key"] or "none")
+    client = OpenAI(base_url=config["base_url"], api_key=config["api_key"] or "none", timeout=120)
     response = client.chat.completions.create(
         model=config["model"],
         messages=[{"role": "system", "content": system_prompt}],

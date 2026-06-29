@@ -263,7 +263,7 @@ def main():
     args = parser.parse_args()
 
     Handler.config_path = args.config
-    server = http.server.HTTPServer((args.host, args.port), Handler)
+    server = http.server.ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"  strusky server  http://{args.host}:{args.port}")
     print(f"  POST /run      execute strusky code")
     print(f"  GET  /docs     Swagger UI")

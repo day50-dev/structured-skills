@@ -174,7 +174,7 @@ USER REQUEST: {prompt}"""
 
 def create_agent_via_llm(prompt):
     config = load_config(str(PROJECT / "config.toml"))["decoder"]
-    client = OpenAI(base_url=config["base_url"], api_key=config["api_key"] or "none")
+    client = OpenAI(base_url=config["base_url"], api_key=config["api_key"] or "none", timeout=120)
     guide = _load_guide()
     response = client.chat.completions.create(
         model=config["model"],
@@ -418,7 +418,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Connection", "keep-alive")
             self.end_headers()
             try:
-                client = OpenAI(base_url=config["base_url"], api_key=config["api_key"] or "none")
+                client = OpenAI(base_url=config["base_url"], api_key=config["api_key"] or "none", timeout=120)
                 guide = _load_guide()
                 system_msg = _MODIFY_SYSTEM.format(guide=guide, script=current_script, instruction=instruction)
                 response = client.chat.completions.create(
@@ -484,7 +484,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             try:
                 guide = _load_guide()
                 system_msg = _MODIFY_SYSTEM.format(guide=guide, script=current_script, instruction=instruction)
-                client = OpenAI(base_url=config["base_url"], api_key=config["api_key"] or "none")
+                client = OpenAI(base_url=config["base_url"], api_key=config["api_key"] or "none", timeout=120)
                 response = client.chat.completions.create(
                     model=config["model"],
                     messages=[{"role": "system", "content": system_msg}],
@@ -571,7 +571,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 def main():
-    server = http.server.HTTPServer(("0.0.0.0", PORT), Handler)
+    server = http.server.ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"  strusky frontend → http://localhost:{PORT}")
     try:
         server.serve_forever()

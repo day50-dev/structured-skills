@@ -31,7 +31,8 @@ class VM:
         self.config = load_config(config_path)["inference"]
         self.client = OpenAI(
             base_url=self.config["base_url"],
-            api_key=self.config["api_key"] or "none"
+            api_key=self.config["api_key"] or "none",
+            timeout=120
         )
 
         # Debugging support

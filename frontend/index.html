@@ -773,14 +773,24 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // API helpers
-async function api(method, path, body) {
-  const opts = { method, headers: {} };
-  if (body) {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(body);
+async function api(method, path, body, timeoutMs) {
+  if (timeoutMs === undefined) timeoutMs = 60000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const opts = { method, headers: {}, signal: controller.signal };
+    if (body) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    const res = await fetch(path, opts);
+    clearTimeout(timer);
+    return res.json();
+  } catch (e) {
+    clearTimeout(timer);
+    if (e.name === 'AbortError') throw new Error('Request timed out');
+    throw e;
   }
-  const res = await fetch(path, opts);
-  return res.json();
 }
 
 // Agent list
@@ -795,7 +805,7 @@ async function refreshList() {
     if (!stillExists) {
       clearMain();
     } else {
-      selectAgent(currentAgent.name);
+      selectAgent(currentAgent.name, currentTab);
     }
   }
 }
@@ -819,13 +829,13 @@ function renderList() {
 
 // Agent selection
 let _selecting = false;
-async function selectAgent(name) {
+async function selectAgent(name, tab) {
   hideCreatePanel();
   hideGuide();
   const data = await api('GET', `/api/agents/${encodeURIComponent(name)}`);
   if (data.error) { showToast(data.error, 'error'); return; }
   _selecting = true;
-    location.hash = '#run/agent/' + encodeURIComponent(name);
+    location.hash = '#' + (tab || 'run') + '/agent/' + encodeURIComponent(name);
     currentAgent = data;
     currentInputSpecs = strusky.parseInputSpecs(data.content);
     document.getElementById('placeholder').style.display = 'none';
@@ -852,7 +862,7 @@ async function selectAgent(name) {
   document.getElementById('runOutputArea').style.display = 'none';
 
   renderList();
-  switchTab(currentTab);
+  switchTab(tab || currentTab);
   // Highlight code view (after tab switch so element is visible)
   const codeEl = document.getElementById('codeView');
   codeEl.textContent = data.content;
@@ -953,8 +963,7 @@ function handleHash() {
       agentName = decodeURIComponent(h.slice(6));
     }
     if (agentName) {
-      selectAgent(agentName);
-      switchTab(tab);
+      selectAgent(agentName, tab);
     } else {
       hideGuide();
       if (!currentAgent) {
@@ -1068,12 +1077,17 @@ async function modifyAgent() {
   outputEl.textContent = '';
   outputEl.style.display = '';
   btn.disabled = true;
+  let abortTimer;
   try {
+    const abortCtrl = new AbortController();
+    abortTimer = setTimeout(() => abortCtrl.abort(), 120000);
     const res = await fetch(`/api/agents/${encodeURIComponent(currentAgent.name)}/modify-stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ instruction }),
+      signal: abortCtrl.signal,
     });
+    clearTimeout(abortTimer);
     if (!res.ok) {
       const errText = await res.text().catch(() => 'unknown error');
       outputEl.textContent = 'Error: ' + errText;
@@ -1135,7 +1149,12 @@ async function modifyAgent() {
       }
     }
   } catch (e) {
-    outputEl.textContent += '\nError: ' + (e.message || 'Connection failed');
+    clearTimeout(abortTimer);
+    if (e.name === 'AbortError') {
+      outputEl.textContent += '\nError: Request timed out — inference took too long';
+    } else {
+      outputEl.textContent += '\nError: ' + (e.message || 'Connection failed');
+    }
     showToast('Failed to modify agent', 'error');
   } finally {
     btn.disabled = false;

@@ -28,11 +28,22 @@ const strusky = (() => {
 
   function serve(code, input, opts = {}) {
     const endpoint = opts.endpoint || '/api/serve';
+    const timeout = opts.timeout || 60000;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
     return fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, input }),
-    }).then(r => r.json());
+      signal: controller.signal,
+    }).then(r => {
+      clearTimeout(timer);
+      return r.json();
+    }).catch(e => {
+      clearTimeout(timer);
+      if (e.name === 'AbortError') throw new Error('Request timed out');
+      throw e;
+    });
   }
 
   return { parseInputSpecs, parseOutputSpecs, serve };

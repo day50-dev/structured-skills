@@ -46,7 +46,8 @@ class Decoder:
         self.config = load_config(config_path)["decoder"]
         self.client = OpenAI(
             base_url=self.config["base_url"],
-            api_key=self.config["api_key"] or "none"
+            api_key=self.config["api_key"] or "none",
+            timeout=120
         )
 
     def decode_line(self, line: str, imports_context: str = "", line_number: int = 0) -> List[Opcode]:
